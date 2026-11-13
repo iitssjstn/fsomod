@@ -14,7 +14,7 @@ Een FS25-mod kan zelf geen internetverbinding maken. Daarom draait er bij de str
 | Map | Wat |
 |---|---|
 | `server/` | Node.js-server: inloggen met Twitch, dashboard, EventSub-webhooks, channel-points-beloningen, OBS-overlay |
-| `companion/` | Hulpprogramma voor de streamer (wordt een Windows `.exe`) |
+| `companion/` | Windows-programma voor de streamer (C#/.NET 8, WinForms): `Fs25Sabotage.App` (venster + systeemvak), `Fs25Sabotage.Core` (logica), `Fs25Sabotage.Cli` (zonder venster, voor tests) |
 | `mod/FS25_TwitchSabotage/` | De FS25-mod (Lua) |
 | `mod/tests/` | Test van de mod in een nagebootste FS25-omgeving |
 | `deploy/` | `compose-snippet.yml` (voor een bestaande compose met NPM) en een losse `docker-compose.yml` |
@@ -125,7 +125,7 @@ De deploy werkt **alleen de service `fs25-sabotage`** bij; andere services in de
 
 1. **Test server + hulpprogramma**: unit-tests en een end-to-end test (nep-Twitch-webhook → server → hulpprogramma → nagebootste mod → resultaat terug).
 2. **Test FS25-mod**: Lua-syntax, `modDesc.xml` en alle acties in een nagebootste FS25-omgeving (`lua5.1`).
-3. **Mod-zip** en **hulpprogramma-`.exe`** bouwen (te downloaden als artifacts bij de workflow-run).
+3. **Mod-zip** en het **Windows-programma** bouwen (`dotnet publish` op een Windows-runner: één `.exe` met .NET ingebouwd; te downloaden als artifacts bij de workflow-run).
 4. **Docker-image** bouwen met de zip en `.exe` erin (de website biedt ze aan via `/downloads/`), en pushen naar `ghcr.io/iitssjstn/fsomod` (`latest`, `sha-…`, en bij tags het versienummer).
 5. **Release** (alleen bij een tag `v*`): GitHub-release met de zip en de `.exe`.
 6. **Deploy**: SSH naar de VPS en alleen de service `fs25-sabotage` vernieuwen.
@@ -144,7 +144,10 @@ git push origin v1.0.1
 
 1. Ga naar de website en klik op **Inloggen met Twitch**.
 2. Download de **mod** en zet de zip in `Documenten\My Games\FarmingSimulator2025\mods`.
-3. Download het **hulpprogramma**, start het en plak de koppelcode van de website (daar zit ook het serveradres in). Daarna start het automatisch met Windows.
+3. Download het **Windows-programma**, start het en plak de koppelcode van de website (daar zit ook het serveradres in). Klik op **Koppelen**.
+   - Het venster laat zien of de server en de game verbonden zijn (groen/rood).
+   - Met het kruisje gaat het naar het systeemvak (rechtsonder bij de klok). Afsluiten doe je met de rechtermuisknop op het icoon.
+   - **Starten met Windows** staat na het koppelen aan en kun je uitvinken. Er zijn geen beheerdersrechten nodig.
 
 Laad een savegame. De status op het dashboard springt dan op groen. Met de **Test**-knoppen kun je elke actie uitproberen.
 
@@ -163,7 +166,7 @@ cd server && node src/server.js
 Open daarna <http://localhost:3000/admin>; de installatiecode staat in de uitvoer van de server.
 
 ```bash
-cd companion && npm install && node companion.js
+dotnet run --project companion/Fs25Sabotage.Cli -- --key FS25-...
 ```
 
 ```bash

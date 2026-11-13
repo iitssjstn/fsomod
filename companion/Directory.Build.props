@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <Version>1.1.0</Version>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Company>FS25 Twitch Sabotage</Company>
+    <Product>FS25 Twitch Sabotage</Product>
+  </PropertyGroup>
+</Project>

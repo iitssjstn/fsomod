@@ -23,8 +23,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm ci
-        working-directory: companion
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Hulpprogramma (versie zonder venster) bouwen voor de end-to-end test
+        run: dotnet build companion/Fs25Sabotage.Cli -c Release
       - run: npm ci
         working-directory: server
       - run: npm test
@@ -68,23 +71,25 @@ jobs:
           path: dist/FS25_TwitchSabotage.zip
 
   build-companion:
-    name: Hulpprogramma (.exe) bouwen
+    name: Windows-programma (.exe) bouwen
     needs: test-server
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          node-version: 22
-      - run: npm ci
-        working-directory: companion
-      - name: Bouwen met pkg
-        working-directory: companion
-        run: npx -y @yao-pkg/pkg@6.25.0 . --targets node22-win-x64 --output dist/FS25TwitchSabotage.exe --no-bytecode --public-packages "*" --public
+          dotnet-version: '8.0.x'
+      - name: Publiceren (één .exe, .NET ingebouwd, geen installatie nodig)
+        shell: bash
+        run: |
+          VERSION_ARG=""
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then VERSION_ARG="-p:Version=${GITHUB_REF_NAME#v}"; fi
+          dotnet publish companion/Fs25Sabotage.App -c Release -o dist $VERSION_ARG
+          ls -la dist
       - uses: actions/upload-artifact@v4
         with:
           name: companion
-          path: companion/dist/FS25TwitchSabotage.exe
+          path: dist/FS25TwitchSabotage.exe
 
   # ---------------------------------------------------------------- docker
   docker:

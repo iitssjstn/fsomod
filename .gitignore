@@ -7,3 +7,5 @@ companion/build-config.json
 .env
 *.log
 dist/
+companion/**/bin/
+companion/**/obj/

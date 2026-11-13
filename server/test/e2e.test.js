@@ -17,6 +17,14 @@ const gameDir = path.join(tmp, 'game');
 const modDir = path.join(gameDir, 'modSettings', 'FS25_TwitchSabotage');
 const procs = [];
 
+// Het echte hulpprogramma (zelfde logica als de Windows-app), als versie zonder venster.
+const COMPANION_DIR = path.join(__dirname, '..', '..', 'companion', 'Fs25Sabotage.Cli');
+const COMPANION_DLL = path.join(COMPANION_DIR, 'bin', 'Release', 'net8.0', 'Fs25Sabotage.Cli.dll');
+if (!fs.existsSync(COMPANION_DLL)) {
+  const r = require('node:child_process').spawnSync('dotnet', ['build', COMPANION_DIR, '-c', 'Release'], { stdio: 'inherit' });
+  if (r.status !== 0) throw new Error('dotnet build van het hulpprogramma mislukt');
+}
+
 fs.mkdirSync(dataDir, { recursive: true });
 fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
   users: { '123': { id: '123', login: 'tester', displayName: 'Tester', pairKey: 'PAIR', overlayKey: 'OVL', cmdEpoch: 'ep1', broadcasterType: '', config: { gapSeconds: 0 } } },
@@ -128,8 +136,7 @@ test('hulpprogramma verbindt en game wordt actief', async () => {
   const me = await (await fetch(`${BASE}/api/me`, { headers: { cookie: sessionCookie() } })).json();
   assert.ok(me.pairCode.startsWith('FS25-'));
   // alleen de koppelcode: het serveradres zit erin
-  start(process.execPath, [path.join(__dirname, '..', '..', 'companion', 'companion.js'), '--key', me.pairCode, '--game-dir', gameDir, '--no-autostart'],
-    { HOME: tmp, APPDATA: tmp });
+  start('dotnet', [COMPANION_DLL, '--key', me.pairCode, '--game-dir', gameDir, '--config-dir', path.join(tmp, 'cfg')], {});
   await waitFor(async () => {
     const me = await (await fetch(`${BASE}/api/me`, { headers: { cookie: sessionCookie() } })).json();
     return me.status.companionConnected && me.status.gameActive;
