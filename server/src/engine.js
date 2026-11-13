@@ -85,6 +85,7 @@ function enqueue(user, { actionId, viewer, source, amount = 0, rewardId, redempt
     id, action: action.id, label: action.id === actionId ? action.label : `${label}: ${action.label}`,
     param: cfg.actions[action.id]?.param ?? action.param ?? null,
     viewer: viewer || 'Anoniem', source, amount, text: (text || '').slice(0, 200),
+    target: cfg.target || 'streamer', player: (cfg.playerName || '').trim(),
     rewardId, redemptionId, queuedAt: Date.now(),
   };
   ch(user.id).queue.push(cmd);
@@ -116,7 +117,7 @@ function sendCommand(c, user, cmd) {
   c.ws.send(JSON.stringify({
     type: 'command',
     epoch: user.cmdEpoch,
-    cmd: { id: cmd.id, action: cmd.action, param: cmd.param, viewer: cmd.viewer, source: cmd.source, amount: cmd.amount, text: cmd.text, label: cmd.label },
+    cmd: { id: cmd.id, action: cmd.action, param: cmd.param, viewer: cmd.viewer, source: cmd.source, amount: cmd.amount, text: cmd.text, label: cmd.label, target: cmd.target, player: cmd.player },
   }));
 }
 
@@ -141,7 +142,7 @@ function onResult(userId, { id, status, msg }) {
 }
 
 // ---------- Hulpprogramma (WebSocket) ----------
-function attachCompanion(user, ws) {
+function attachCompanion(user, ws, label = 'Hulpprogramma') {
   const c = ch(user.id);
   if (c.ws && c.ws !== ws) { try { c.ws.close(4000, 'Nieuwe verbinding'); } catch {} }
   c.ws = ws;
@@ -149,7 +150,7 @@ function attachCompanion(user, ws) {
   ws.send(JSON.stringify({ type: 'hello', user: user.displayName, epoch: db.getUser(user.id).cmdEpoch }));
   // Opdrachten die al verstuurd waren maar nog geen resultaat hebben opnieuw sturen (mod negeert dubbele).
   for (const cmd of c.pending.values()) sendCommand(c, db.getUser(user.id), cmd);
-  log(user.id, { kind: 'system', msg: 'Hulpprogramma verbonden' });
+  log(user.id, { kind: 'system', msg: `${label} verbonden` });
 
   ws.on('message', raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
@@ -160,7 +161,7 @@ function attachCompanion(user, ws) {
     if (c.ws !== ws) return;
     c.ws = null;
     setGameActive(user.id, false);
-    log(user.id, { kind: 'system', msg: 'Hulpprogramma verbroken' });
+    log(user.id, { kind: 'system', msg: `${label} verbroken` });
   });
 }
 

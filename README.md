@@ -140,7 +140,21 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
-## Voor de streamer (3 stappen)
+## Voor de streamer: op een gehuurde server (bijv. G-Portal)
+
+Geen programma op de pc nodig. De website praat via FTP met de gameserver.
+
+1. Ga naar de website en klik op **Inloggen met Twitch**.
+2. Kies bij **Hoe speel je?** de optie **Op een gehuurde server**.
+3. Vul de **FTP-gegevens** uit het G-Portal-webpanel in en klik op **Opslaan & testen**. De map met `mods` wordt automatisch gevonden. Het FTP-wachtwoord blijft op de website en wordt nooit teruggestuurd naar de browser.
+4. Klik op **Mod op server zetten**, herstart de server via G-Portal en zet de mod aan in de savegame.
+5. Vul je **spelernaam** in zoals je in FS25 heet.
+
+Onder **Acties** kies je **wie er gesaboteerd wordt**: alleen jij, een willekeurige speler in een voertuig, of iedereen. Alle spelers op de server zien de meldingen.
+
+> De verbinding probeert eerst versleutelde FTP (FTPS). Ondersteunt de server dat niet, dan gaat het via gewone FTP: het wachtwoord gaat dan onversleuteld van je VPS naar de gameserver.
+
+## Voor de streamer: singleplayer of zelf hosten (3 stappen)
 
 1. Ga naar de website en klik op **Inloggen met Twitch**.
 2. Download de **mod** en zet de zip in `Documenten\My Games\FarmingSimulator2025\mods`.
@@ -175,5 +189,5 @@ lua5.1 mod/tests/mod_test.lua
 
 ## Beperkingen
 - **Channel points** werken alleen voor Twitch **Affiliates/Partners** (beperking van Twitch). Bits werken ook alleen bij Affiliates/Partners, want alleen die kunnen bits ontvangen.
-- **Multiplayer**: de acties werken op het voertuig van de streamer. **Boete, geldcadeau en tijdsprong** werken alleen als de streamer de **host** is. Op een dedicated server doet de mod niets.
+- **Multiplayer**: de mod voert opdrachten uit op de server (dedicated server, host of singleplayer). Spelers die meedoen hebben de mod automatisch via de server en krijgen meldingen in beeld. Een **tijdsprong** geldt altijd voor de hele server.
 - De mod is getest in een nagebootste FS25-omgeving tegen de echte FS25-functiesignaturen, maar **nog niet in de echte game**. Kijk bij problemen in `Documenten\My Games\FarmingSimulator2025\log.txt` naar regels met `[TwitchSabotage]`.

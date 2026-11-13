@@ -136,6 +136,12 @@ public sealed class Bridge : IDisposable
                 PairingRejected?.Invoke(closeReason);
                 return;
             }
+            if (closeStatus == 4002)
+            {
+                // Kanaal gebruikt een gameserver via FTP; dit programma is dan niet nodig.
+                Say(closeReason.Length > 0 ? closeReason : "Dit kanaal gebruikt een gameserver via FTP.");
+                delay = 60_000;
+            }
             if (ct.IsCancellationRequested) break;
             Say($"Opnieuw verbinden over {delay / 1000} s…");
             try { await Task.Delay(delay, ct); } catch { break; }
@@ -245,7 +251,9 @@ public sealed class Bridge : IDisposable
                     new XAttribute("source", Str(c, "source")),
                     new XAttribute("amount", c.TryGetProperty("amount", out var a) && a.ValueKind == JsonValueKind.Number ? a.GetInt64() : 0),
                     new XAttribute("label", Clean(Str(c, "label"))),
-                    new XAttribute("text", Clean(Str(c, "text")))));
+                    new XAttribute("text", Clean(Str(c, "text"))),
+                    new XAttribute("target", Str(c, "target")),
+                    new XAttribute("player", Clean(Str(c, "player")))));
             }
         }
         var file = Path.Combine(dir, "inbox.xml");

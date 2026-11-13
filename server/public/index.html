@@ -42,6 +42,13 @@
   .ok { color:var(--green) } .fail { color:var(--red) } .sys { color:var(--muted) }
   .notice { padding:10px 12px; border-radius:6px; background:#2b2414; border:1px solid #5a4a1e; margin-bottom:12px }
   .hidden { display:none }
+  .modes { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px; margin-bottom:14px }
+  .mode { display:block; border:1px solid var(--line); border-radius:8px; padding:12px; cursor:pointer }
+  .mode:has(input:checked) { border-color:var(--green); background:#1c2a21 }
+  .mode .muted { display:block; font-size:13px; margin-left:22px }
+  .form label { display:block; margin-top:8px; font-size:13px }
+  .form input { display:block; width:100%; margin-top:3px; background:#0b100d; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:6px }
+  .step button { margin-top:10px }
   .hero { text-align:center; padding:60px 20px }
   .hero h2 { font-size:28px; margin:0 0 10px }
 </style>
@@ -65,25 +72,58 @@
   <!-- Ingelogd -->
   <section id="loggedIn" class="hidden">
     <div class="card">
-      <h2>In 3 stappen klaar</h2>
-      <div class="steps">
-        <div class="step"><b>1. Download de mod</b>
-          <span class="muted">Zet de zip (niet uitpakken) in<br><code>Documenten\My Games\FarmingSimulator2025\mods</code></span><br><br>
-          <a class="btn secondary" href="/downloads/FS25_TwitchSabotage.zip">Mod downloaden</a></div>
-        <div class="step"><b>2. Download het hulpprogramma</b>
-          <span class="muted">Start het en plak je koppelcode. Daarna start het automatisch.</span><br><br>
-          <a class="btn secondary" href="/downloads/FS25TwitchSabotage.exe">Hulpprogramma (Windows)</a></div>
-        <div class="step"><b>3. Je koppelcode</b>
-          <span class="muted">Geheim houden! Niet laten zien op stream.</span><br>
-          <span class="key" id="pairKey">••••••••••</span>
-          <div style="margin-top:8px"><button class="small secondary" id="showKey">Tonen</button> <button class="small secondary" id="copyKey">Kopiëren</button> <button class="small secondary" id="newKey">Nieuwe code</button></div></div>
+      <h2>Hoe speel je?</h2>
+      <div class="modes">
+        <label class="mode"><input type="radio" name="mode" value="ftp"> <b>Op een gehuurde server</b><span class="muted">bijv. G-Portal. Geen programma op je pc nodig.</span></label>
+        <label class="mode"><input type="radio" name="mode" value="app"> <b>Singleplayer of zelf hosten</b><span class="muted">met het Windows-programma op je pc.</span></label>
+      </div>
+
+      <!-- Gehuurde server via FTP -->
+      <div id="modeFtp" class="hidden">
+        <div class="steps">
+          <div class="step"><b>1. FTP-gegevens van je server</b>
+            <span class="muted">Te vinden in het webpanel van G-Portal bij je server (FTP-toegang).</span>
+            <div class="form">
+              <label>Server <input id="ftpHost" placeholder="bijv. 123.45.67.89" autocomplete="off"></label>
+              <label>Poort <input id="ftpPort" type="number" min="1" max="65535" value="21"></label>
+              <label>Gebruikersnaam <input id="ftpUser" autocomplete="off"></label>
+              <label>Wachtwoord <input id="ftpPass" type="password" autocomplete="new-password"></label>
+              <label>Map <span class="muted">(leeg = automatisch zoeken)</span> <input id="ftpPath" placeholder="automatisch" autocomplete="off"></label>
+            </div>
+            <button id="ftpSave">Opslaan &amp; testen</button>
+            <div id="ftpMsg" class="muted" style="margin-top:8px"></div></div>
+          <div class="step"><b>2. Mod op de server zetten</b>
+            <span class="muted">Zet de mod met één klik in de <code>mods</code>-map van je server. Herstart daarna de server via het webpanel en zet de mod aan in je savegame.</span><br><br>
+            <button class="secondary" id="installMod">Mod op server zetten</button>
+            <div id="installMsg" class="muted" style="margin-top:8px"></div></div>
+          <div class="step"><b>3. Je spelernaam</b>
+            <span class="muted">Zoals je in FS25 heet op de server. Zo weet de mod welke trekker van jou is.</span>
+            <div class="form"><label>Spelernaam <input id="playerName" autocomplete="off"></label></div>
+            <button class="secondary" id="savePlayer">Opslaan</button> <span id="playerMsg" class="muted"></span></div>
+        </div>
+      </div>
+
+      <!-- Windows-programma -->
+      <div id="modeApp" class="hidden">
+        <div class="steps">
+          <div class="step"><b>1. Download de mod</b>
+            <span class="muted">Zet de zip (niet uitpakken) in<br><code>Documenten\My Games\FarmingSimulator2025\mods</code></span><br><br>
+            <a class="btn secondary" href="/downloads/FS25_TwitchSabotage.zip">Mod downloaden</a></div>
+          <div class="step"><b>2. Download het Windows-programma</b>
+            <span class="muted">Start het en plak je koppelcode.</span><br><br>
+            <a class="btn secondary" href="/downloads/FS25TwitchSabotage.exe">Windows-programma</a></div>
+          <div class="step"><b>3. Je koppelcode</b>
+            <span class="muted">Geheim houden! Niet laten zien op stream.</span><br>
+            <span class="key" id="pairKey">••••••••••</span>
+            <div style="margin-top:8px"><button class="small secondary" id="showKey">Tonen</button> <button class="small secondary" id="copyKey">Kopiëren</button> <button class="small secondary" id="newKey">Nieuwe code</button></div></div>
+        </div>
       </div>
     </div>
 
     <div class="card">
       <h2>Status</h2>
       <div class="status">
-        <span class="pill"><span class="dot" id="dotCompanion"></span> Hulpprogramma</span>
+        <span class="pill"><span class="dot" id="dotCompanion"></span> <span id="linkLabel">Verbinding</span></span>
         <span class="pill"><span class="dot" id="dotGame"></span> Game actief</span>
         <span class="pill">Wachtrij: <b id="queueLen">0</b></span>
         <button class="small secondary" id="clearQueue">Wachtrij legen</button>
@@ -104,6 +144,12 @@
           </select></label>
         <label>Minimaal <input type="number" id="gapSeconds" min="0" max="600" style="width:70px"> sec tussen sabotages</label>
         <label><input type="checkbox" id="pauseWhenOffline"> Beloningen pauzeren als de game niet draait</label>
+        <label>Wie wordt er gesaboteerd?
+          <select id="target">
+            <option value="streamer">Alleen ik</option>
+            <option value="random">Een willekeurige speler in een voertuig</option>
+            <option value="all">Iedereen die in een voertuig zit</option>
+          </select></label>
       </div>
       <p class="muted">Sabotage kan <b>alleen</b> met bits of channel points. Een gewoon chatbericht als <code>!motor</code> doet niets.
         Wie met bits cheert, kan in hetzelfde cheer-bericht een woord zetten om te kiezen, bijvoorbeeld <code>Cheer100 !motor</code>. Zonder woord geldt de instelling hierboven.
@@ -156,6 +202,9 @@ async function init() {
   $('#bitsMode').value = me.config.bitsMode;
   $('#gapSeconds').value = me.config.gapSeconds;
   $('#pauseWhenOffline').checked = me.config.pauseWhenOffline;
+  $('#target').value = me.config.target || 'streamer';
+  $('#playerName').value = me.config.playerName || '';
+  renderLink();
   renderActions();
   setStatus(me.status);
   me.log.slice().reverse().forEach(addLog);
@@ -190,7 +239,7 @@ function renderActions() {
 }
 
 $('#save').onclick = async () => {
-  const cfg = { actions:{}, bitsMode:$('#bitsMode').value, gapSeconds:$('#gapSeconds').value, pauseWhenOffline:$('#pauseWhenOffline').checked };
+  const cfg = { actions:{}, bitsMode:$('#bitsMode').value, gapSeconds:$('#gapSeconds').value, pauseWhenOffline:$('#pauseWhenOffline').checked, target:$('#target').value, playerName:$('#playerName').value };
   document.querySelectorAll('#actions tr[data-id]').forEach(tr => {
     const v = {};
     tr.querySelectorAll('[data-f]').forEach(i => v[i.dataset.f] = i.type === 'checkbox' ? i.checked : i.value);
@@ -208,6 +257,49 @@ $('#copyKey').onclick = async () => { await navigator.clipboard.writeText(me.pai
 $('#newKey').onclick = async () => { if (!confirm('Nieuwe koppelcode maken? Het hulpprogramma moet dan opnieuw gekoppeld worden.')) return; me.pairCode = (await api('/api/pairkey', { method:'POST' })).pairCode; if (keyShown) $('#pairKey').textContent = me.pairCode; };
 $('#clearQueue').onclick = () => api('/api/clear-queue', { method:'POST' });
 $('#resub').onclick = async () => { const r = await api('/api/resubscribe', { method:'POST' }); alert(r.results.map(x => `${x.type}: ${x.ok ? 'OK' : x.error}`).join('\n')); };
+
+// ---------- Verbinding met de game ----------
+function renderLink() {
+  const l = me.link;
+  document.querySelectorAll('input[name=mode]').forEach(r => r.checked = r.value === l.mode);
+  $('#modeFtp').classList.toggle('hidden', l.mode !== 'ftp');
+  $('#modeApp').classList.toggle('hidden', l.mode !== 'app');
+  $('#linkLabel').textContent = l.mode === 'ftp' ? 'Gameserver (FTP)' : 'Windows-programma';
+  $('#ftpHost').value = l.ftp.host; $('#ftpPort').value = l.ftp.port; $('#ftpUser').value = l.ftp.user; $('#ftpPath').value = l.ftp.path;
+  $('#ftpPass').value = '';
+  $('#ftpPass').placeholder = l.ftp.passwordSet ? '•••••••• (opgeslagen)' : '';
+}
+async function postJson(path, body) {
+  const res = await fetch(path, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body || {}) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+document.querySelectorAll('input[name=mode]').forEach(r => r.onchange = async () => {
+  me.link = (await postJson('/api/link', { mode: r.value })).link; renderLink();
+});
+$('#ftpSave').onclick = async () => {
+  const msg = $('#ftpMsg');
+  msg.innerHTML = 'Opslaan en verbinden…';
+  try {
+    me.link = (await postJson('/api/link', { mode:'ftp', host:$('#ftpHost').value, port:$('#ftpPort').value, user:$('#ftpUser').value, password:$('#ftpPass').value, path:$('#ftpPath').value })).link;
+    renderLink();
+    const t = await postJson('/api/link/test');
+    msg.innerHTML = `<span class="ok">✔ Verbonden${t.secure ? ' (versleuteld)' : ''}</span><br>Map: <code>${esc(t.profile)}</code><br>`
+      + (t.modInstalled ? '✔ Mod staat op de server' : '✖ Mod staat nog niet op de server (stap 2)') + '<br>'
+      + (t.modRan ? '✔ Mod heeft al gedraaid op de server' : 'ℹ Mod heeft nog niet gedraaid: herstart de server en laad de savegame');
+  } catch (e) { msg.innerHTML = `<span class="fail">${esc(e.message)}</span>`; }
+};
+$('#installMod').onclick = async () => {
+  const msg = $('#installMsg');
+  msg.textContent = 'Uploaden…';
+  try { const r = await postJson('/api/link/install-mod'); msg.innerHTML = `<span class="ok">✔ Geüpload naar <code>${esc(r.path)}</code>. Herstart nu de server.</span>`; }
+  catch (e) { msg.innerHTML = `<span class="fail">${esc(e.message)}</span>`; }
+};
+$('#savePlayer').onclick = async () => {
+  await postJson('/api/config', { playerName: $('#playerName').value });
+  $('#playerMsg').innerHTML = '<span class="ok">Opgeslagen ✔</span>';
+};
 
 function setStatus(s) {
   $('#dotCompanion').classList.toggle('on', s.companionConnected);

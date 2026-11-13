@@ -61,7 +61,9 @@ function defaultConfig() {
     actions,
     bitsMode: 'highest',   // 'highest' | 'random' | 'keyword_only'
     gapSeconds: 5,         // minimale tijd tussen twee sabotages in de game
-    pauseWhenOffline: true // channel-points-beloningen pauzeren als de game niet draait
+    pauseWhenOffline: true, // channel-points-beloningen pauzeren als de game niet draait
+    target: 'streamer',     // 'streamer' | 'random' | 'all': wie wordt er gesaboteerd (multiplayer)
+    playerName: '',         // spelernaam van de streamer in FS25 (nodig op een server)
   };
 }
 

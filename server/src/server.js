@@ -8,6 +8,7 @@ const db = require('./db');
 const twitch = require('./twitch');
 const engine = require('./engine');
 const { ACTIONS, mergeConfig } = require('./actions');
+const { FtpLink, testConnection, installMod } = require('./ftplink');
 
 // Alleen interne paden/poort (staan vast in de Docker-image). Alle echte instellingen gaan via /admin.
 const PORT = Number(process.env.PORT || 3000);
@@ -279,7 +280,60 @@ app.get('/api/me', requireUser, (req, res) => {
     rewards: u.rewards || {},
     status: engine.publicStatus(u.id),
     log: engine.ch(u.id).log.slice(0, 50),
+    link: publicLink(u),
   });
+});
+
+// ---------- Verbinding met de game: Windows-programma of FTP (gehuurde server) ----------
+const links = new Map(); // userId -> FtpLink
+
+function publicLink(u) {
+  const f = u.link?.ftp || {};
+  // Het FTP-wachtwoord gaat nooit naar de browser.
+  return { mode: u.link?.mode || 'app', ftp: { host: f.host || '', port: f.port || 21, user: f.user || '', path: f.path || '', passwordSet: !!f.password } };
+}
+const ftpComplete = f => !!(f && f.host && f.user && f.password);
+
+function startLink(userId) {
+  const old = links.get(userId);
+  if (old) { links.delete(userId); old.close(); }
+  const user = db.getUser(userId);
+  if (!user || user.link?.mode !== 'ftp' || !ftpComplete(user.link.ftp)) return;
+  const link = new FtpLink(user.link.ftp, msg => engine.log(userId, { kind: 'system', msg }));
+  link.on('close', () => { if (links.get(userId) === link) links.delete(userId); });
+  links.set(userId, link);
+  engine.attachCompanion(user, link, 'Gameserver (FTP)');
+}
+
+app.post('/api/link', requireUser, (req, res) => {
+  const b = req.body || {};
+  const cur = req.user.link || {};
+  const ftp = { ...(cur.ftp || {}) };
+  if (typeof b.host === 'string') ftp.host = b.host.trim().replace(/^s?ftps?:\/\//i, '').replace(/\/.*$/, '');
+  if (b.port !== undefined) ftp.port = clampInt(b.port, 1, 65535);
+  if (typeof b.user === 'string') ftp.user = b.user.trim();
+  if (typeof b.password === 'string' && b.password) ftp.password = b.password; // leeg = ongewijzigd
+  if (typeof b.path === 'string') ftp.path = b.path.trim();
+  const mode = b.mode === 'ftp' ? 'ftp' : 'app';
+  const user = db.upsertUser(req.user.id, { link: { mode, ftp } });
+  startLink(user.id);
+  res.json({ ok: true, link: publicLink(user) });
+});
+
+app.post('/api/link/test', requireUser, async (req, res) => {
+  const f = req.user.link?.ftp;
+  if (!ftpComplete(f)) return res.status(400).json({ error: 'Vul eerst server, gebruikersnaam en wachtwoord in.' });
+  try { res.json(await testConnection(f)); }
+  catch (e) { res.status(400).json({ error: `Verbinding mislukt: ${e.message}` }); }
+});
+
+app.post('/api/link/install-mod', requireUser, async (req, res) => {
+  const f = req.user.link?.ftp;
+  if (!ftpComplete(f)) return res.status(400).json({ error: 'Vul eerst de FTP-gegevens in.' });
+  const zip = path.join(DOWNLOADS_DIR, 'FS25_TwitchSabotage.zip');
+  if (!require('fs').existsSync(zip)) return res.status(500).json({ error: 'Mod-zip ontbreekt op de website.' });
+  try { res.json(await installMod(f, zip)); }
+  catch (e) { res.status(400).json({ error: `Uploaden mislukt: ${e.message}` }); }
 });
 
 app.post('/api/config', requireUser, async (req, res) => {
@@ -299,6 +353,8 @@ app.post('/api/config', requireUser, async (req, res) => {
   if (['highest', 'random', 'keyword_only'].includes(incoming.bitsMode)) cfg.bitsMode = incoming.bitsMode;
   if (incoming.gapSeconds !== undefined) cfg.gapSeconds = clampInt(incoming.gapSeconds, 0, 600);
   if (incoming.pauseWhenOffline !== undefined) cfg.pauseWhenOffline = !!incoming.pauseWhenOffline;
+  if (['streamer', 'random', 'all'].includes(incoming.target)) cfg.target = incoming.target;
+  if (typeof incoming.playerName === 'string') cfg.playerName = incoming.playerName.trim().slice(0, 64);
   const user = db.upsertUser(req.user.id, { config: cfg });
 
   let errors = [];
@@ -378,6 +434,10 @@ wss.on('connection', (ws, req) => {
     ws.send(JSON.stringify({ type: 'error', message: 'Ongeldige koppelcode. Kopieer de code opnieuw van de website.' }));
     return ws.close(4003, 'Ongeldige koppelcode');
   }
+  if (user.link?.mode === 'ftp') {
+    ws.send(JSON.stringify({ type: 'error', message: 'Dit kanaal gebruikt een gameserver via FTP. Zet op de website de verbinding op "Windows-programma" om dit programma te gebruiken.' }));
+    return ws.close(4002, 'Kanaal gebruikt FTP');
+  }
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
   engine.attachCompanion(user, ws);
@@ -390,6 +450,9 @@ setInterval(() => {
   }
 }, 30_000).unref();
 
-server.listen(PORT, () => console.log(`FS25 Twitch Sabotage server draait op poort ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`FS25 Twitch Sabotage server draait op poort ${PORT}`);
+  for (const u of db.allUsers()) startLink(u.id);
+});
 
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { db.flush(); process.exit(0); });

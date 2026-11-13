@@ -56,7 +56,7 @@ g_currentMission = {
     getFarmId = function() return 1 end,
     showBlinkingWarning = function(_, text) table.insert(notifications, text) end,
     addIngameNotification = function() end,
-    addMoney = function(_, amount) money = money + amount end,
+    addMoney = function(_, amount, farmId) money = money + amount; farmMoney[farmId] = (farmMoney[farmId] or 0) + amount end,
     setTimeScale = function(self, s) self.timeScale = s end,
 }
 
@@ -128,9 +128,29 @@ g_localPlayer = {
 
 function addModEventListener(l) end
 
+-- Netwerk-mocks
+local broadcasts, sentToConn = {}, {}
+function Class(t, base) return { __index = t } end
+Event = { new = function(mt) return setmetatable({}, mt) end }
+function InitEventClass() end
+g_server = { broadcastEvent = function(_, ev) table.insert(broadcasts, ev) end }
+g_currentMission.vehicleSystem = { vehicles = {} }
+g_currentMission.playerUserId = 1
+g_currentMission.userManager = {
+    users = { { id = 1, nick = "Streamer" } },
+    getUserByUserId = function(self, id) for _, u in ipairs(self.users) do if u.id == id then return { getNickname = function() return u.nick end, getId = function() return u.id end } end end end,
+    getUsers = function(self) local out = {} for _, u in ipairs(self.users) do table.insert(out, { getNickname = function() return u.nick end, getId = function() return u.id end }) end return out end,
+}
+local farmMoney = { [1] = 100000, [2] = 50000 }
+g_farmManager = {
+    getFarmByUserId = function(_, userId) return ({ [1] = { farmId = 1 }, [10] = { farmId = 1 }, [11] = { farmId = 2 } })[userId] end,
+    getFarmById = function(_, id) return { changeBalance = function(_, a) farmMoney[id] = farmMoney[id] + a end } end,
+}
+
 -- ---------- Mod laden ----------
-local modPath = (arg and arg[1]) or "mod/FS25_TwitchSabotage/scripts/TwitchSabotage.lua"
-dofile(modPath)
+local modDir = (arg and arg[1]) or "mod/FS25_TwitchSabotage/scripts/"
+dofile(modDir .. "TwitchSabotageEvent.lua")
+dofile(modDir .. "TwitchSabotage.lua")
 local TS = TwitchSabotage
 TS:loadMap("test")
 
@@ -201,6 +221,80 @@ files[INBOX] = { ["inbox#epoch"] = "nieuw" }; cmdList = {}
 inVehicle = tractor; tractor.motor = true
 send(1, "engine_off")
 check(tractor.motor == false and result(1) == "ok", "nieuwe epoch: id-teller reset")
+
+print("Multiplayer (dedicated server):")
+g_dedicatedServer = {}
+g_localPlayer = nil
+local function mpTractor(nick, userId)
+    local t = newFillVehicle({ { level = 400, cap = 400, type = 10 } })
+    t.spec_motorized = { consumersByFillTypeName = { DIESEL = { fillUnitIndex = 1 } } }
+    t.spec_enterable = { controllerUserId = userId }
+    t.motor = true; t.honking = false; t.implements = {}
+    t.conn = { sent = {}, sendEvent = function(c, ev) table.insert(c.sent, ev) end }
+    function t:getRootVehicle() return self end
+    function t:getIsControlled() return true end
+    function t:getControllerName() return nick end
+    function t:getOwnerConnection() return self.conn end
+    function t:getIsMotorStarted() return self.motor end
+    function t:stopMotor() self.motor = false end
+    function t:getConsumerFillUnitIndex(ft) if ft == 10 then return 1 end end
+    function t:getAttachedImplements() return self.implements end
+    function t:playHonk(v) self.honking = v end
+    return t
+end
+local papa, jan = mpTractor("Papa", 10), mpTractor("Jan", 11)
+local parked = mpTractor("Niemand", 0); function parked:getIsControlled() return false end
+g_currentMission.vehicleSystem.vehicles = { papa, jan, parked }
+table.insert(g_currentMission.userManager.users, { id = 10, nick = "Papa" })
+table.insert(g_currentMission.userManager.users, { id = 11, nick = "Jan" })
+
+files[INBOX] = { ["inbox#epoch"] = "mp" }; cmdList = {}
+local function sendT(id, action, target, player, param)
+    local i = #cmdList; cmdList[#cmdList + 1] = true
+    local p = files[INBOX]; local k = string.format("inbox.cmd(%d)", i)
+    p[k .. "#id"] = tostring(id); p[k .. "#action"] = action; p[k .. "#param"] = param or ""
+    p[k .. "#viewer"] = "Kijker"; p[k .. "#source"] = "points"; p[k .. "#amount"] = "1000"; p[k .. "#label"] = action
+    p[k .. "#text"] = ""; p[k .. "#target"] = target or ""; p[k .. "#player"] = player or ""
+    TS:update(TS.POLL_INTERVAL)
+end
+
+local b0 = #broadcasts
+sendT(1, "engine_off", "streamer", "papa")
+check(papa.motor == false and jan.motor == true, "streamer-doelwit: alleen Papa (hoofdletterongevoelig)")
+check(#broadcasts == b0 + 1 and broadcasts[#broadcasts].text:find("Papa") ~= nil, "melding naar alle spelers, met naam slachtoffer")
+check(result(1) == "ok", "resultaat ok")
+sendT(2, "engine_off", "streamer", "Onbekend")
+check(result(2) == "failed", "onbekende speler → failed (punten terug)")
+papa.motor = true
+sendT(3, "engine_off", "all")
+check(papa.motor == false and jan.motor == false, "doelwit iedereen: beide trekkers")
+check(parked.motor == true, "geparkeerde trekker zonder bestuurder blijft met rust")
+papa.motor = true; jan.motor = true
+sendT(4, "engine_off", "random")
+check((papa.motor == false) ~= (jan.motor == false), "willekeurig: precies één speler")
+sendT(5, "fuel_leak", "streamer", "Jan", "50")
+check(jan.levels[1] == 200 and papa.levels[1] == 400, "brandstoflek op de server voor speler Jan")
+sendT(6, "kick_out", "streamer", "Jan")
+check(#jan.conn.sent == 1 and jan.conn.sent[1].kind == "kick" and #papa.conn.sent == 0, "eruit gooien: kick-bericht alleen naar Jan")
+local before2 = farmMoney[2]
+sendT(7, "money_loss", "streamer", "Jan", "1000")
+check(farmMoney[2] == before2 - 1000, "boete gaat van de boerderij van Jan af")
+sendT(8, "message", "streamer", "Papa")
+check(broadcasts[#broadcasts].kind == "notify", "bericht op scherm naar iedereen")
+sendT(9, "honk", "streamer", "Papa", "1")
+TS:update(1500)
+check(papa.honking == false, "toeteren stopt weer (timer per voertuig)")
+
+print("Netwerkbericht:")
+local shown = {}
+local oldShow = TwitchSabotage.showLocal
+TwitchSabotage.showLocal = function(t) table.insert(shown, t) end
+local ev = TwitchSabotageEvent.new("notify", "Hoi", 1000)
+ev:run({ getIsServer = function() return false end })
+check(#shown == 0, "bericht van een speler (niet de server) wordt genegeerd")
+ev:run({ getIsServer = function() return true end })
+check(shown[1] == "Hoi", "bericht van de server wordt getoond")
+TwitchSabotage.showLocal = oldShow
 
 print(failures == 0 and "\nALLES GESLAAGD" or ("\n" .. failures .. " TEST(S) MISLUKT"))
 if failures > 0 then os.exit(1) end

@@ -8,11 +8,15 @@
     "test": "node --test --test-concurrency=1 test/*.test.js"
   },
   "dependencies": {
+    "basic-ftp": "6.2.6",
     "express": "^4.21.2",
     "ws": "^8.18.0"
   },
   "private": true,
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "ftp-srv": "4.6.3"
   }
 }
