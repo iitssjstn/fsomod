@@ -1,18 +1,15 @@
 // Twitch API: OAuth, Helix (channel points) en EventSub (webhooks).
+// Alle instellingen komen uit de opslag (in te vullen via /admin), niet uit omgevingsvariabelen.
 const db = require('./db');
 
-const CLIENT_ID = process.env.TWITCH_CLIENT_ID;
-const CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
-const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
-const EVENTSUB_SECRET = process.env.EVENTSUB_SECRET;
-
+const S = () => db.getSettings();
 const SCOPES = ['bits:read', 'channel:read:redemptions', 'channel:manage:redemptions'];
-const REDIRECT_URI = `${BASE_URL}/auth/callback`;
+const redirectUri = base => `${base}/auth/callback`;
 
-function authorizeUrl(state) {
+function authorizeUrl(state, base) {
   const p = new URLSearchParams({
-    client_id: CLIENT_ID,
-    redirect_uri: REDIRECT_URI,
+    client_id: S().clientId,
+    redirect_uri: redirectUri(base),
     response_type: 'code',
     scope: SCOPES.join(' '),
     state,
@@ -25,21 +22,22 @@ async function tokenRequest(params) {
   const res = await fetch('https://id.twitch.tv/oauth2/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, ...params }),
+    body: new URLSearchParams({ client_id: S().clientId, client_secret: S().clientSecret, ...params }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(`token error ${res.status}: ${JSON.stringify(data)}`);
   return data;
 }
 
-const exchangeCode = code => tokenRequest({ code, grant_type: 'authorization_code', redirect_uri: REDIRECT_URI });
+const exchangeCode = (code, base) => tokenRequest({ code, grant_type: 'authorization_code', redirect_uri: redirectUri(base) });
 
 // --- App access token (voor EventSub-webhooks) ---
 let appToken = null;
+function resetAppToken() { appToken = null; }
 async function getAppToken() {
-  if (appToken && appToken.expiresAt > Date.now() + 60_000) return appToken.token;
+  if (appToken && appToken.clientId === S().clientId && appToken.expiresAt > Date.now() + 60_000) return appToken.token;
   const data = await tokenRequest({ grant_type: 'client_credentials' });
-  appToken = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
+  appToken = { token: data.access_token, clientId: S().clientId, expiresAt: Date.now() + data.expires_in * 1000 };
   return appToken.token;
 }
 
@@ -58,7 +56,7 @@ async function helix(method, path, { user, body, query } = {}) {
   const doFetch = async token => fetch(url, {
     method,
     headers: {
-      'Client-Id': CLIENT_ID,
+      'Client-Id': S().clientId,
       Authorization: `Bearer ${token}`,
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
@@ -86,7 +84,7 @@ async function helix(method, path, { user, body, query } = {}) {
 
 async function getUserInfo(accessToken) {
   const res = await fetch('https://api.twitch.tv/helix/users', {
-    headers: { 'Client-Id': CLIENT_ID, Authorization: `Bearer ${accessToken}` },
+    headers: { 'Client-Id': S().clientId, Authorization: `Bearer ${accessToken}` },
   });
   const data = await res.json();
   if (!res.ok) throw new Error('users error: ' + JSON.stringify(data));
@@ -99,7 +97,7 @@ const EVENT_TYPES = [
   { type: 'channel.channel_points_custom_reward_redemption.add', version: '1' },
 ];
 
-async function subscribeEvents(broadcasterId) {
+async function subscribeEvents(broadcasterId, base) {
   const results = [];
   for (const ev of EVENT_TYPES) {
     try {
@@ -108,7 +106,7 @@ async function subscribeEvents(broadcasterId) {
           type: ev.type,
           version: ev.version,
           condition: { broadcaster_user_id: broadcasterId },
-          transport: { method: 'webhook', callback: `${BASE_URL}/eventsub`, secret: EVENTSUB_SECRET },
+          transport: { method: 'webhook', callback: `${base}/eventsub`, secret: S().eventsubSecret },
         },
       });
       results.push({ type: ev.type, ok: true });
@@ -155,7 +153,7 @@ const setRedemptionStatus = (user, rewardId, redemptionId, status) =>
   });
 
 module.exports = {
-  BASE_URL, EVENTSUB_SECRET, authorizeUrl, exchangeCode, getUserInfo,
+  redirectUri, resetAppToken, authorizeUrl, exchangeCode, getUserInfo,
   subscribeEvents, listSubscriptions, unsubscribeAll,
   createReward, updateReward, deleteReward, setRedemptionStatus,
 };

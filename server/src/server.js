@@ -9,33 +9,56 @@ const twitch = require('./twitch');
 const engine = require('./engine');
 const { ACTIONS, mergeConfig } = require('./actions');
 
+// Alleen interne paden/poort (staan vast in de Docker-image). Alle echte instellingen gaan via /admin.
 const PORT = Number(process.env.PORT || 3000);
-const SESSION_SECRET = process.env.SESSION_SECRET;
 const DOWNLOADS_DIR = process.env.DOWNLOADS_DIR || path.join(__dirname, '..', 'downloads');
-
-for (const k of ['TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET', 'BASE_URL', 'SESSION_SECRET', 'EVENTSUB_SECRET']) {
-  if (!process.env[k]) console.warn(`[waarschuwing] ${k} is niet ingesteld (zie .env.example)`);
-}
 
 db.load();
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', true); // achter Nginx Proxy Manager: X-Forwarded-Proto/Host vertrouwen
+app.disable('x-powered-by');
 
-// ---------- Sessies (ondertekende cookie) ----------
-const sign = v => crypto.createHmac('sha256', SESSION_SECRET || 'dev').update(v).digest('base64url');
-function setSession(res, userId) {
-  const v = `${userId}.${sign(userId)}`;
-  res.setHeader('Set-Cookie', `sid=${v}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}${twitch.BASE_URL.startsWith('https') ? '; Secure' : ''}`);
+// Eenmalige installatiecode: alleen zichtbaar in de containerlogs (docker logs).
+let setupCode = null;
+function ensureSetupCode() {
+  if (db.getSettings().adminHash) { setupCode = null; return; }
+  if (!setupCode) setupCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+  console.log('\n==================================================');
+  console.log(' Nog niet ingesteld. Open https://<jouw-domein>/admin');
+  console.log(` Installatiecode: ${setupCode}`);
+  console.log('==================================================\n');
+}
+ensureSetupCode();
+
+// Publiek adres: optioneel vastgezet in /admin, anders afgeleid van het verzoek (domein uit NPM).
+function detectedBase(req) {
+  const host = (req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+  return `${req.protocol}://${host}`;
+}
+function baseUrl(req) {
+  const fixed = (db.getSettings().baseUrl || '').replace(/\/$/, '');
+  return fixed || detectedBase(req);
+}
+
+// ---------- Cookies & sessies ----------
+const sign = v => crypto.createHmac('sha256', db.getSettings().sessionSecret).update(v).digest('base64url');
+function cookie(res, name, value, maxAge, req) {
+  const secure = req.secure ? '; Secure' : '';
+  res.append('Set-Cookie', `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`);
 }
 function getCookie(req, name) {
   const m = (req.headers.cookie || '').match(new RegExp(`(?:^|; )${name}=([^;]+)`));
   return m ? decodeURIComponent(m[1]) : null;
 }
+function safeEqual(a, b) {
+  const x = Buffer.from(String(a)); const y = Buffer.from(String(b));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
 function currentUser(req) {
   const sid = getCookie(req, 'sid');
   if (!sid) return null;
   const [id, sig] = sid.split('.');
-  if (!id || !sig || sign(id) !== sig) return null;
+  if (!id || !sig || !safeEqual(sign(id), sig)) return null;
   return db.getUser(id);
 }
 function requireUser(req, res, next) {
@@ -44,7 +67,41 @@ function requireUser(req, res, next) {
   next();
 }
 
+// Beheerder-sessie: ongeldig zodra het wachtwoord verandert (hash zit in de handtekening).
+function adminToken(exp) { return `${exp}.${sign(`admin:${exp}:${db.getSettings().adminHash}`)}`; }
+function isAdmin(req) {
+  const v = getCookie(req, 'adm');
+  if (!v || !db.getSettings().adminHash) return false;
+  const [exp] = v.split('.');
+  return Number(exp) > Date.now() && safeEqual(adminToken(exp), v);
+}
+function requireAdmin(req, res, next) {
+  if (!isAdmin(req)) return res.status(401).json({ error: 'Niet ingelogd als beheerder' });
+  next();
+}
+function hashPassword(pw) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  return `${salt}:${crypto.scryptSync(pw, salt, 64).toString('hex')}`;
+}
+function checkPassword(pw, stored) {
+  const [salt, hash] = String(stored || '').split(':');
+  if (!salt || !hash) return false;
+  return safeEqual(crypto.scryptSync(String(pw), salt, 64).toString('hex'), hash);
+}
+
+// Simpele rem op raden van wachtwoord/installatiecode.
+const attempts = new Map();
+function tooMany(req) {
+  const k = req.ip; const now = Date.now();
+  const a = (attempts.get(k) || []).filter(t => now - t < 15 * 60_000);
+  attempts.set(k, a);
+  return a.length >= 10;
+}
+const failed = req => attempts.get(req.ip)?.push(Date.now()) ?? attempts.set(req.ip, [Date.now()]);
+
 const newKey = () => crypto.randomBytes(18).toString('base64url');
+// Koppelcode voor het hulpprogramma: bevat ook het serveradres, zodat de .exe niets ingebouwd hoeft te hebben.
+const pairCode = (req, user) => 'FS25-' + Buffer.from(`${baseUrl(req)}|${user.pairKey}`).toString('base64url');
 
 // ---------- EventSub webhook (heeft de ruwe body nodig voor de handtekening) ----------
 app.post('/eventsub', express.raw({ type: '*/*', limit: '1mb' }), (req, res) => {
@@ -53,10 +110,10 @@ app.post('/eventsub', express.raw({ type: '*/*', limit: '1mb' }), (req, res) => 
   const sig = req.get('Twitch-Eventsub-Message-Signature') || '';
   const type = req.get('Twitch-Eventsub-Message-Type');
   const body = req.body instanceof Buffer ? req.body : Buffer.from('');
+  if (!id || !ts) return res.sendStatus(403);
 
-  const expected = 'sha256=' + crypto.createHmac('sha256', twitch.EVENTSUB_SECRET || '').update(id + ts).update(body).digest('hex');
-  const valid = sig.length === expected.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
-  if (!valid) return res.sendStatus(403);
+  const expected = 'sha256=' + crypto.createHmac('sha256', db.getSettings().eventsubSecret).update(id + ts).update(body).digest('hex');
+  if (!safeEqual(sig, expected)) return res.sendStatus(403);
   if (Math.abs(Date.now() - Date.parse(ts)) > 10 * 60_000) return res.sendStatus(403);
 
   const msg = JSON.parse(body.toString('utf8'));
@@ -65,8 +122,7 @@ app.post('/eventsub', express.raw({ type: '*/*', limit: '1mb' }), (req, res) => 
   if (db.seenEvent(id)) return;
 
   const subType = msg.subscription?.type;
-  const broadcasterId = msg.subscription?.condition?.broadcaster_user_id;
-  const user = db.getUser(broadcasterId);
+  const user = db.getUser(msg.subscription?.condition?.broadcaster_user_id);
   if (!user) return;
 
   if (type === 'revocation') {
@@ -81,17 +137,101 @@ app.post('/eventsub', express.raw({ type: '*/*', limit: '1mb' }), (req, res) => 
 
 app.use(express.json({ limit: '200kb' }));
 
-// ---------- Inloggen met Twitch ----------
+// Openbare status: alleen of de site klaar is, nooit instellingen.
+app.get('/api/status', (req, res) => res.json({ configured: db.isConfigured() }));
+
+// ---------- Beheer (/admin) ----------
+app.get('/api/admin/state', (req, res) => {
+  const s = db.getSettings();
+  const base = baseUrl(req);
+  const out = { setupDone: !!s.adminHash, loggedIn: isAdmin(req), detectedBaseUrl: detectedBase(req), redirectUrl: twitch.redirectUri(base) };
+  if (out.loggedIn) {
+    Object.assign(out, {
+      clientId: s.clientId || '',
+      clientSecretSet: !!s.clientSecret,          // het secret zelf gaat nooit naar de browser
+      baseUrl: s.baseUrl || '',
+      streamers: db.allUsers().map(u => ({ login: u.login, displayName: u.displayName, connected: !!engine.ch(u.id).ws, gameActive: engine.ch(u.id).gameActive })),
+    });
+  }
+  res.json(out);
+});
+
+app.post('/api/admin/setup', (req, res) => {
+  if (db.getSettings().adminHash) return res.status(409).json({ error: 'Al ingesteld' });
+  if (tooMany(req)) return res.status(429).json({ error: 'Te veel pogingen, wacht 15 minuten' });
+  const { code, password } = req.body || {};
+  if (!setupCode || !safeEqual(String(code || '').trim().toUpperCase(), setupCode)) {
+    failed(req);
+    return res.status(403).json({ error: 'Onjuiste installatiecode (zie: docker logs fs25-sabotage)' });
+  }
+  if (String(password || '').length < 10) return res.status(400).json({ error: 'Wachtwoord moet minstens 10 tekens zijn' });
+  db.updateSettings({ adminHash: hashPassword(password) });
+  setupCode = null;
+  const exp = Date.now() + 12 * 3600_000;
+  cookie(res, 'adm', adminToken(exp), 12 * 3600, req);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/login', (req, res) => {
+  if (tooMany(req)) return res.status(429).json({ error: 'Te veel pogingen, wacht 15 minuten' });
+  if (!checkPassword(req.body?.password, db.getSettings().adminHash)) {
+    failed(req);
+    return res.status(403).json({ error: 'Onjuist wachtwoord' });
+  }
+  const exp = Date.now() + 12 * 3600_000;
+  cookie(res, 'adm', adminToken(exp), 12 * 3600, req);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/logout', (req, res) => { cookie(res, 'adm', '', 0, req); res.json({ ok: true }); });
+
+app.post('/api/admin/settings', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  const fields = {};
+  if (typeof b.clientId === 'string') fields.clientId = b.clientId.trim();
+  if (typeof b.clientSecret === 'string' && b.clientSecret.trim()) fields.clientSecret = b.clientSecret.trim(); // leeg = ongewijzigd
+  if (typeof b.baseUrl === 'string') {
+    const u = b.baseUrl.trim().replace(/\/$/, '');
+    if (u && !/^https?:\/\/[^\s/]+$/.test(u)) return res.status(400).json({ error: 'Basisadres moet zoiets zijn als https://sabotage.mijndomein.nl' });
+    fields.baseUrl = u;
+  }
+  if (typeof b.newPassword === 'string' && b.newPassword) {
+    if (b.newPassword.length < 10) return res.status(400).json({ error: 'Wachtwoord moet minstens 10 tekens zijn' });
+    fields.adminHash = hashPassword(b.newPassword);
+  }
+  db.updateSettings(fields);
+  twitch.resetAppToken();
+  if (fields.adminHash) cookie(res, 'adm', adminToken(Date.now() + 12 * 3600_000), 12 * 3600, req);
+  res.json({ ok: true });
+});
+
+// Na wijzigen van domein of Twitch-app: alle EventSub-koppelingen opnieuw aanmaken.
+app.post('/api/admin/resubscribe-all', requireAdmin, async (req, res) => {
+  const base = baseUrl(req);
+  const results = [];
+  for (const u of db.allUsers()) {
+    try {
+      await twitch.unsubscribeAll(u.id);
+      const r = await twitch.subscribeEvents(u.id, base);
+      results.push({ login: u.login, ok: r.every(x => x.ok), errors: r.filter(x => !x.ok).map(x => x.error) });
+    } catch (e) { results.push({ login: u.login, ok: false, errors: [e.message] }); }
+  }
+  res.json({ results });
+});
+
+// ---------- Inloggen met Twitch (streamers) ----------
 app.get('/auth/login', (req, res) => {
+  if (!db.isConfigured()) return res.redirect('/');
   const state = newKey();
-  res.setHeader('Set-Cookie', `oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`);
-  res.redirect(twitch.authorizeUrl(state));
+  cookie(res, 'oauth_state', state, 600, req);
+  res.redirect(twitch.authorizeUrl(state, baseUrl(req)));
 });
 
 app.get('/auth/callback', async (req, res) => {
   try {
     if (!req.query.code || req.query.state !== getCookie(req, 'oauth_state')) return res.status(400).send('Ongeldige login, probeer opnieuw.');
-    const tok = await twitch.exchangeCode(req.query.code);
+    const base = baseUrl(req);
+    const tok = await twitch.exchangeCode(req.query.code, base);
     const info = await twitch.getUserInfo(tok.access_token);
     const existing = db.getUser(info.id);
     const user = db.upsertUser(info.id, {
@@ -108,36 +248,33 @@ app.get('/auth/callback', async (req, res) => {
       config: mergeConfig(existing?.config),
       createdAt: existing?.createdAt || Date.now(),
     });
-    const subs = await twitch.subscribeEvents(user.id);
-    const failed = subs.filter(s => !s.ok);
-    if (failed.length) engine.log(user.id, { kind: 'system', msg: 'EventSub-fout: ' + failed.map(f => f.error).join('; ') });
+    const subs = await twitch.subscribeEvents(user.id, base);
+    const failedSubs = subs.filter(s => !s.ok);
+    if (failedSubs.length) engine.log(user.id, { kind: 'system', msg: 'EventSub-fout: ' + failedSubs.map(f => f.error).join('; ') });
     if (!existing && user.broadcasterType) {
       const errors = await engine.syncRewards(user);
       if (errors.length) engine.log(user.id, { kind: 'system', msg: 'Beloningen: ' + errors.join('; ') });
     }
-    setSession(res, user.id);
+    cookie(res, 'sid', `${user.id}.${sign(user.id)}`, 60 * 60 * 24 * 30, req);
     res.redirect('/');
   } catch (e) {
     console.error('[auth]', e);
-    res.status(500).send('Inloggen mislukt: ' + e.message);
+    res.status(500).send('Inloggen mislukt. Probeer het later opnieuw.');
   }
 });
 
-app.post('/auth/logout', (req, res) => {
-  res.setHeader('Set-Cookie', 'sid=; Path=/; Max-Age=0');
-  res.json({ ok: true });
-});
+app.post('/auth/logout', (req, res) => { cookie(res, 'sid', '', 0, req); res.json({ ok: true }); });
 
-// ---------- Dashboard API ----------
+// ---------- Dashboard API (streamers) ----------
 app.get('/api/actions', (req, res) => res.json(ACTIONS));
 
 app.get('/api/me', requireUser, (req, res) => {
   const u = req.user;
   res.json({
     id: u.id, login: u.login, displayName: u.displayName, avatar: u.avatar,
-    broadcasterType: u.broadcasterType, pairKey: u.pairKey,
-    serverUrl: twitch.BASE_URL,
-    overlayUrl: `${twitch.BASE_URL}/overlay.html?key=${u.overlayKey}`,
+    broadcasterType: u.broadcasterType,
+    pairCode: pairCode(req, u),
+    overlayUrl: `${baseUrl(req)}/overlay.html?key=${u.overlayKey}`,
     config: engine.configOf(u),
     rewards: u.rewards || {},
     status: engine.publicStatus(u.id),
@@ -174,7 +311,7 @@ app.post('/api/pairkey', requireUser, (req, res) => {
   const user = db.upsertUser(req.user.id, { pairKey: newKey() });
   const c = engine.ch(user.id);
   if (c.ws) c.ws.close(4001, 'Koppelcode vernieuwd');
-  res.json({ pairKey: user.pairKey });
+  res.json({ pairCode: pairCode(req, user) });
 });
 
 app.post('/api/test/:action', requireUser, (req, res) => {
@@ -184,7 +321,7 @@ app.post('/api/test/:action', requireUser, (req, res) => {
 });
 
 app.post('/api/resubscribe', requireUser, async (req, res) => {
-  res.json({ results: await twitch.subscribeEvents(req.user.id) });
+  res.json({ results: await twitch.subscribeEvents(req.user.id, baseUrl(req)) });
 });
 
 app.post('/api/clear-queue', requireUser, (req, res) => {
@@ -218,6 +355,7 @@ app.get('/overlay/stream', (req, res) => {
 });
 
 app.get('/healthz', (req, res) => res.json({ ok: true }));
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'admin.html')));
 app.use('/downloads', express.static(DOWNLOADS_DIR));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -252,6 +390,6 @@ setInterval(() => {
   }
 }, 30_000).unref();
 
-server.listen(PORT, () => console.log(`FS25 Twitch Sabotage server draait op poort ${PORT} (${twitch.BASE_URL})`));
+server.listen(PORT, () => console.log(`FS25 Twitch Sabotage server draait op poort ${PORT}`));
 
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { db.flush(); process.exit(0); });

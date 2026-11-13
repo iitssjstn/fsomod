@@ -17,7 +17,7 @@ Een FS25-mod kan zelf geen internetverbinding maken. Daarom draait er bij de str
 | `companion/` | Hulpprogramma voor de streamer (wordt een Windows `.exe`) |
 | `mod/FS25_TwitchSabotage/` | De FS25-mod (Lua) |
 | `mod/tests/` | Test van de mod in een nagebootste FS25-omgeving |
-| `deploy/` | `docker-compose.yml`, Caddy- en nginx-config voor je VPS |
+| `deploy/` | `compose-snippet.yml` (voor een bestaande compose met NPM) en een losse `docker-compose.yml` |
 | `.github/workflows/build.yml` | Testen, mod-zip + `.exe` + Docker-image bouwen, release, deploy |
 
 ## Sabotage-acties
@@ -63,83 +63,53 @@ Alle prijzen, cooldowns en waarden past de streamer aan in het dashboard.
 
 ## Eenmalige installatie (beheerder)
 
-### 1. Twitch-app aanmaken
-1. Ga naar <https://dev.twitch.tv/console/apps> → **Register Your Application**.
-2. **OAuth Redirect URL**: `https://JOUW-DOMEIN/auth/callback`
-3. Categorie: *Game Integration*. Client type: *Confidential*.
-4. Noteer de **Client ID** en maak een **Client Secret** aan.
+Er staan **geen geheimen in Docker of in een `.env`-bestand**. De Twitch-keys en het beheerderswachtwoord stel je in op de beheerpagina `/admin`. Ze worden opgeslagen in het Docker-volume `fs25-sabotage-data`. Interne geheimen (sessies, EventSub) maakt de server zelf aan. Bezoekers en streamers zien deze gegevens nooit: het Twitch Client Secret gaat zelfs niet terug naar de beheerpagina.
 
-### 2. VPS klaarmaken
-Vereist: Docker met de compose-plugin, en een (sub)domein dat naar je VPS wijst.
+### 1. Container toevoegen
+**Al een docker-compose met Nginx Proxy Manager?** Voeg het blok uit `deploy/compose-snippet.yml` toe aan je bestaande `docker-compose.yml`. Alle services in die compose delen één netwerk, dus NPM bereikt de app via `fs25-sabotage:3000`. Een `ports:`-regel is niet nodig.
 
-```bash
-sudo mkdir -p /opt/fs25-sabotage && cd /opt/fs25-sabotage
-```
+**Nog geen compose?** Gebruik `deploy/docker-compose.yml`. Die laat de app luisteren op `127.0.0.1:3000`.
 
-Kopieer `deploy/docker-compose.yml` en `deploy/.env.example` naar die map (plus `deploy/Caddyfile` als je Caddy gebruikt), en hernoem `.env.example` naar `.env`. Vul daarna `.env` in. Willekeurige geheimen maak je zo:
+Start de container:
 
 ```bash
-openssl rand -hex 32
+docker compose up -d fs25-sabotage
 ```
 
-De Docker-image staat op GitHub Container Registry en is standaard **privé**. Kies één van de twee:
-- maak het package openbaar: GitHub → je profiel → *Packages* → `fsomod` → *Package settings* → *Change visibility* → Public, **of**
-- log op de VPS één keer in met een token dat `read:packages` heeft:
+De image staat op GitHub Container Registry. Als het package privé is, moet de VPS ingelogd zijn bij `ghcr.io`, net als voor je andere `ghcr.io/iitssjstn/...`-images.
 
-```bash
-docker login ghcr.io -u iitssjstn
-```
+### 2. Proxy Host in Nginx Proxy Manager
+- **Details**: je domein, scheme `http`, Forward Hostname `fs25-sabotage`, poort `3000`, **Websockets Support aan** (nodig voor het hulpprogramma).
+- **SSL**: *Request a new SSL Certificate* en **Force SSL** aan. Twitch stuurt events alleen naar `https://`.
+- **Advanced**, voor het live logboek en de OBS-overlay:
+  ```nginx
+  proxy_buffering off;
+  proxy_read_timeout 1h;
+  ```
 
-#### Al een docker-compose met Nginx Proxy Manager erin?
-Voeg het blok uit `deploy/compose-snippet.yml` toe aan je bestaande `docker-compose.yml`. Zet de vier `FS25_...`-geheimen in het `.env`-bestand ernaast. Zet op GitHub de variabele `VPS_APP_DIR` op de map van die compose. De deploy-workflow werkt alleen de service `fs25-sabotage` bij; je andere services blijven ongemoeid.
+Het basisadres van de site haalt de server automatisch uit het domein dat NPM doorstuurt. Je hoeft het nergens in te stellen.
 
-#### Met Nginx Proxy Manager (NPM) in een aparte compose
-NPM draait zelf in Docker en kan `127.0.0.1:3000` van de host niet bereiken. Zet de app daarom in het netwerk van NPM:
-
-1. Zoek de naam van het NPM-netwerk op (vaak `npm_default` of `nginx-proxy-manager_default`) en zet die in `.env` als `NPM_NETWORK=...`:
+### 3. Instellen via `/admin`
+1. Haal de eenmalige installatiecode op:
    ```bash
-   docker network ls
+   docker logs fs25-sabotage
    ```
-2. Kopieer `deploy/docker-compose.npm.yml` naar de VPS als `docker-compose.override.yml`. `docker compose` en de deploy-workflow lezen het dan automatisch mee.
-3. Start de app:
-   ```bash
-   docker compose up -d
-   ```
-4. Maak in NPM een **Proxy Host** aan:
-   - **Details**: domeinnaam, scheme `http`, Forward Hostname `fs25-sabotage`, Forward Port `3000`, **Websockets Support aan** (nodig voor het hulpprogramma), Block Common Exploits aan.
-   - **SSL**: *Request a new SSL Certificate*, **Force SSL** aan, HTTP/2 aan.
-   - **Advanced**, voor het live logboek en de OBS-overlay:
-     ```nginx
-     proxy_buffering off;
-     proxy_read_timeout 1h;
-     ```
+2. Ga naar `https://JOUW-DOMEIN/admin`, vul de code in en kies een beheerderswachtwoord.
+3. Maak op <https://dev.twitch.tv/console/apps> een app aan. Gebruik als **OAuth Redirect URL** het adres dat op de beheerpagina staat (`https://JOUW-DOMEIN/auth/callback`). Kies categorie *Game Integration* en client type *Confidential*.
+4. Vul de **Client ID** en het **Client Secret** in op de beheerpagina en klik op Opslaan.
 
-#### Zonder NPM
-Heb je nog geen webserver, gebruik dan Caddy (regelt HTTPS automatisch):
+Daarna kunnen streamers op de site inloggen met Twitch.
 
-```bash
-docker compose --profile caddy up -d
-```
-
-Draait er al nginx, start dan alleen de app en gebruik `deploy/nginx.conf.example`:
-
-```bash
-docker compose up -d
-```
-
-Twitch EventSub vereist **HTTPS op poort 443**, dus de site moet bereikbaar zijn via `https://JOUW-DOMEIN`.
-
-### 3. GitHub instellen
-Ga naar **Settings → Secrets and variables → Actions**.
+### 4. GitHub instellen (automatisch deployen, optioneel)
+Ga naar **Settings → Secrets and variables → Actions**. Dit zijn alleen gegevens voor de SSH-verbinding; de app zelf heeft geen geheimen nodig.
 
 **Variables:**
 | Naam | Waarde |
 |---|---|
-| `SERVER_URL` | `https://JOUW-DOMEIN`. Wordt in de `.exe` ingebouwd, zodat streamers alleen hun koppelcode hoeven te plakken. |
 | `DEPLOY_ENABLED` | `true` om na elke push naar `main` automatisch te deployen |
-| `VPS_APP_DIR` | optioneel, standaard `/opt/fs25-sabotage` |
+| `VPS_APP_DIR` | map waar je `docker-compose.yml` staat (standaard `/opt/fs25-sabotage`) |
 
-**Secrets** (voor automatisch deployen):
+**Secrets:**
 | Naam | Waarde |
 |---|---|
 | `VPS_HOST` | IP of hostnaam van je VPS |
@@ -147,7 +117,7 @@ Ga naar **Settings → Secrets and variables → Actions**.
 | `VPS_SSH_KEY` | private SSH-sleutel (de publieke sleutel staat in `~/.ssh/authorized_keys` op de VPS) |
 | `VPS_PORT` | optioneel, standaard 22 |
 
-De deploy-job gebruikt de GitHub-environment `production`. Die wordt automatisch aangemaakt. Onder *Settings → Environments* kun je er een goedkeuringsstap aan toevoegen.
+De deploy werkt **alleen de service `fs25-sabotage`** bij; andere services in dezelfde compose blijven ongemoeid. De deploy-job gebruikt de GitHub-environment `production`, waar je onder *Settings → Environments* een goedkeuringsstap aan kunt toevoegen.
 
 ## Workflows
 
@@ -158,7 +128,7 @@ De deploy-job gebruikt de GitHub-environment `production`. Die wordt automatisch
 3. **Mod-zip** en **hulpprogramma-`.exe`** bouwen (te downloaden als artifacts bij de workflow-run).
 4. **Docker-image** bouwen met de zip en `.exe` erin (de website biedt ze aan via `/downloads/`), en pushen naar `ghcr.io/iitssjstn/fsomod` (`latest`, `sha-…`, en bij tags het versienummer).
 5. **Release** (alleen bij een tag `v*`): GitHub-release met de zip en de `.exe`.
-6. **Deploy**: SSH naar de VPS, `docker compose pull && docker compose up -d`.
+6. **Deploy**: SSH naar de VPS en alleen de service `fs25-sabotage` vernieuwen.
 
 Een nieuwe versie uitbrengen:
 
@@ -174,7 +144,7 @@ git push origin v1.0.1
 
 1. Ga naar de website en klik op **Inloggen met Twitch**.
 2. Download de **mod** en zet de zip in `Documenten\My Games\FarmingSimulator2025\mods`.
-3. Download het **hulpprogramma**, start het en plak de koppelcode van de website. Daarna start het automatisch met Windows.
+3. Download het **hulpprogramma**, start het en plak de koppelcode van de website (daar zit ook het serveradres in). Daarna start het automatisch met Windows.
 
 Laad een savegame. De status op het dashboard springt dan op groen. Met de **Test**-knoppen kun je elke actie uitproberen.
 
@@ -187,11 +157,13 @@ cd server && npm install && npm test
 ```
 
 ```bash
-cd server && cp .env.example .env && node --env-file=.env src/server.js
+cd server && node src/server.js
 ```
 
+Open daarna <http://localhost:3000/admin>; de installatiecode staat in de uitvoer van de server.
+
 ```bash
-cd companion && npm install && node companion.js --server http://localhost:3000
+cd companion && npm install && node companion.js
 ```
 
 ```bash

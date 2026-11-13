@@ -16,7 +16,22 @@ function load() {
   }
   state.users ||= {};
   state.eventIds ||= [];
+  state.settings ||= {};
+  // Interne geheimen worden automatisch aangemaakt; niemand hoeft ze in te stellen.
+  const crypto = require('crypto');
+  if (!state.settings.sessionSecret) state.settings.sessionSecret = crypto.randomBytes(32).toString('hex');
+  if (!state.settings.eventsubSecret) state.settings.eventsubSecret = crypto.randomBytes(32).toString('hex');
+  save();
 }
+
+// Instellingen die de beheerder via /admin invult (Twitch-keys, admin-wachtwoord, optioneel basisadres).
+const getSettings = () => state.settings;
+function updateSettings(fields) {
+  state.settings = { ...state.settings, ...fields };
+  save();
+  return state.settings;
+}
+const isConfigured = () => !!(state.settings.clientId && state.settings.clientSecret && state.settings.adminHash);
 
 function save() {
   if (saveTimer) return;
@@ -52,4 +67,4 @@ function seenEvent(messageId) {
   return false;
 }
 
-module.exports = { load, save, flush, getUser, allUsers, findUserBy, upsertUser, seenEvent };
+module.exports = { load, save, flush, getUser, allUsers, findUserBy, upsertUser, seenEvent, getSettings, updateSettings, isConfigured };

@@ -1,6 +1,8 @@
-# Blok om toe te voegen aan een BESTAANDE docker-compose.yml waarin Nginx Proxy Manager al draait.
-# Alle services in die compose delen hetzelfde netwerk, dus NPM bereikt de app via "fs25-sabotage:3000".
-# De geheimen komen uit het .env-bestand naast je docker-compose.yml.
+# Blok voor een BESTAANDE docker-compose.yml waarin Nginx Proxy Manager draait.
+# Alle services in die compose delen één netwerk, dus NPM bereikt de app via "fs25-sabotage:3000".
+#
+# Geen .env en geen geheimen: Twitch-keys stel je in op https://<jouw-domein>/admin
+# (installatiecode staat in: docker logs fs25-sabotage)
 
 services:
   fs25-sabotage:
@@ -10,11 +12,6 @@ services:
     pull_policy: always
     environment:
       - TZ=Europe/Amsterdam
-      - BASE_URL=https://sabotage.jouwdomein.nl
-      - TWITCH_CLIENT_ID=${FS25_TWITCH_CLIENT_ID}
-      - TWITCH_CLIENT_SECRET=${FS25_TWITCH_CLIENT_SECRET}
-      - SESSION_SECRET=${FS25_SESSION_SECRET}
-      - EVENTSUB_SECRET=${FS25_EVENTSUB_SECRET}
     volumes:
       - fs25-sabotage-data:/data
     security_opt:

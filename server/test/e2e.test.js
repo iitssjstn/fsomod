@@ -21,6 +21,7 @@ fs.mkdirSync(dataDir, { recursive: true });
 fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
   users: { '123': { id: '123', login: 'tester', displayName: 'Tester', pairKey: 'PAIR', overlayKey: 'OVL', cmdEpoch: 'ep1', broadcasterType: '', config: { gapSeconds: 0 } } },
   eventIds: [],
+  settings: { sessionSecret: 'sess', eventsubSecret: SECRET },
 }));
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -75,11 +76,44 @@ function sessionCookie() {
   return `sid=123.${sig}`;
 }
 
-const env = { PORT: String(PORT), DATA_DIR: dataDir, BASE_URL: BASE, EVENTSUB_SECRET: SECRET, SESSION_SECRET: 'sess', TWITCH_CLIENT_ID: 'x', TWITCH_CLIENT_SECRET: 'y' };
+// Geen Twitch-keys of geheimen via omgevingsvariabelen: alleen poort en datamap.
+const env = { PORT: String(PORT), DATA_DIR: dataDir };
+let server; let adminCookie = '';
 
-test('server start', async () => {
-  start(process.execPath, [path.join(__dirname, '..', 'src', 'server.js')], env);
+test('server start zonder configuratie', async () => {
+  server = start(process.execPath, [path.join(__dirname, '..', 'src', 'server.js')], env);
   await waitFor(async () => (await fetch(`${BASE}/healthz`).catch(() => null))?.ok);
+  assert.deepEqual(await (await fetch(`${BASE}/api/status`)).json(), { configured: false });
+});
+
+test('installatie: verkeerde code geweigerd, juiste code uit de logs werkt', async () => {
+  const code = await waitFor(() => (server.output.match(/Installatiecode: ([0-9A-F]+)/) || [])[1]);
+  const bad = await fetch(`${BASE}/api/admin/setup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: 'FOUT', password: 'heelgeheim123' }) });
+  assert.equal(bad.status, 403);
+  const ok = await fetch(`${BASE}/api/admin/setup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, password: 'heelgeheim123' }) });
+  assert.equal(ok.status, 200);
+  adminCookie = ok.headers.get('set-cookie').split(';')[0];
+  const again = await fetch(`${BASE}/api/admin/setup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, password: 'nogeenkeer123' }) });
+  assert.equal(again.status, 409);
+});
+
+test('Twitch-keys instellen via beheer; secret gaat nooit terug naar de browser', async () => {
+  const r = await fetch(`${BASE}/api/admin/settings`, { method: 'POST', headers: { cookie: adminCookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: 'cid123', clientSecret: 'SUPERGEHEIM' }) });
+  assert.equal(r.status, 200);
+  const anon = await (await fetch(`${BASE}/api/admin/state`)).text();
+  const admin = await (await fetch(`${BASE}/api/admin/state`, { headers: { cookie: adminCookie } })).text();
+  assert.ok(!anon.includes('cid123') && !anon.includes('SUPERGEHEIM'));
+  assert.ok(admin.includes('cid123') && !admin.includes('SUPERGEHEIM'));
+  assert.ok(JSON.parse(admin).clientSecretSet);
+  assert.deepEqual(await (await fetch(`${BASE}/api/status`)).json(), { configured: true });
+  // zonder beheerder-cookie mag niemand instellingen wijzigen
+  const hack = await fetch(`${BASE}/api/admin/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: 'x' }) });
+  assert.equal(hack.status, 401);
+});
+
+test('basisadres komt uit de proxy-headers (Nginx Proxy Manager)', async () => {
+  const s = await (await fetch(`${BASE}/api/admin/state`, { headers: { 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'sabotage.voorbeeld.nl' } })).json();
+  assert.equal(s.redirectUrl, 'https://sabotage.voorbeeld.nl/auth/callback');
 });
 
 test('webhook verificatie: challenge en ongeldige handtekening', async () => {
@@ -91,7 +125,10 @@ test('webhook verificatie: challenge en ongeldige handtekening', async () => {
 });
 
 test('hulpprogramma verbindt en game wordt actief', async () => {
-  start(process.execPath, [path.join(__dirname, '..', '..', 'companion', 'companion.js'), '--key', 'PAIR', '--server', BASE, '--game-dir', gameDir, '--no-autostart'],
+  const me = await (await fetch(`${BASE}/api/me`, { headers: { cookie: sessionCookie() } })).json();
+  assert.ok(me.pairCode.startsWith('FS25-'));
+  // alleen de koppelcode: het serveradres zit erin
+  start(process.execPath, [path.join(__dirname, '..', '..', 'companion', 'companion.js'), '--key', me.pairCode, '--game-dir', gameDir, '--no-autostart'],
     { HOME: tmp, APPDATA: tmp });
   await waitFor(async () => {
     const me = await (await fetch(`${BASE}/api/me`, { headers: { cookie: sessionCookie() } })).json();

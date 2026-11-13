@@ -57,7 +57,8 @@
     <div class="card hero">
       <h2>Laat je kijkers je boerderij saboteren</h2>
       <p class="muted">Bits en channel points zetten je motor uit, koppelen je maaier los, laten je lading verdwijnen en nog veel meer.</p>
-      <p><a class="btn twitch" href="/auth/login">Inloggen met Twitch</a></p>
+      <p id="loginBtn"><a class="btn twitch" href="/auth/login">Inloggen met Twitch</a></p>
+      <p id="notConfigured" class="notice hidden">Deze site is nog niet ingesteld. Beheerder: ga naar <a href="/admin" style="color:inherit">/admin</a>.</p>
     </div>
   </section>
 
@@ -141,7 +142,12 @@ function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;'
 
 async function init() {
   actions = await api('/api/actions');
-  try { me = await api('/api/me'); } catch { $('#loggedOut').classList.remove('hidden'); return; }
+  try { me = await api('/api/me'); } catch {
+    $('#loggedOut').classList.remove('hidden');
+    const st = await api('/api/status');
+    if (!st.configured) { $('#loginBtn').classList.add('hidden'); $('#notConfigured').classList.remove('hidden'); }
+    return;
+  }
   $('#loggedIn').classList.remove('hidden');
   $('#who').innerHTML = `<img src="${esc(me.avatar)}" alt="" style="vertical-align:middle"> ${esc(me.displayName)} <button class="small secondary" id="logout">Uitloggen</button>`;
   $('#logout').onclick = async () => { await api('/auth/logout', { method:'POST' }); location.reload(); };
@@ -197,9 +203,9 @@ $('#save').onclick = async () => {
   me = await api('/api/me'); renderActions();
 };
 
-$('#showKey').onclick = () => { keyShown = !keyShown; $('#pairKey').textContent = keyShown ? me.pairKey : '••••••••••'; $('#showKey').textContent = keyShown ? 'Verbergen' : 'Tonen'; };
-$('#copyKey').onclick = async () => { await navigator.clipboard.writeText(me.pairKey); $('#copyKey').textContent = 'Gekopieerd!'; setTimeout(() => $('#copyKey').textContent = 'Kopiëren', 1500); };
-$('#newKey').onclick = async () => { if (!confirm('Nieuwe koppelcode maken? Het hulpprogramma moet dan opnieuw gekoppeld worden.')) return; me.pairKey = (await api('/api/pairkey', { method:'POST' })).pairKey; if (keyShown) $('#pairKey').textContent = me.pairKey; };
+$('#showKey').onclick = () => { keyShown = !keyShown; $('#pairKey').textContent = keyShown ? me.pairCode : '••••••••••'; $('#showKey').textContent = keyShown ? 'Verbergen' : 'Tonen'; };
+$('#copyKey').onclick = async () => { await navigator.clipboard.writeText(me.pairCode); $('#copyKey').textContent = 'Gekopieerd!'; setTimeout(() => $('#copyKey').textContent = 'Kopiëren', 1500); };
+$('#newKey').onclick = async () => { if (!confirm('Nieuwe koppelcode maken? Het hulpprogramma moet dan opnieuw gekoppeld worden.')) return; me.pairCode = (await api('/api/pairkey', { method:'POST' })).pairCode; if (keyShown) $('#pairKey').textContent = me.pairCode; };
 $('#clearQueue').onclick = () => api('/api/clear-queue', { method:'POST' });
 $('#resub').onclick = async () => { const r = await api('/api/resubscribe', { method:'POST' }); alert(r.results.map(x => `${x.type}: ${x.ok ? 'OK' : x.error}`).join('\n')); };
 

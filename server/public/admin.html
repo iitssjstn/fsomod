@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Beheer · FS25 Twitch Sabotage</title>
+<style>
+  :root { --bg:#0f1512; --card:#18211c; --line:#2a372f; --text:#e8efe9; --muted:#93a399; --green:#4caf50; --red:#e5534b; }
+  * { box-sizing:border-box }
+  body { margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text) }
+  header { display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid var(--line) }
+  header h1 { font-size:18px; margin:0; flex:1 }
+  main { max-width:760px; margin:0 auto; padding:20px 16px 60px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:18px }
+  .card h2 { margin:0 0 12px; font-size:16px }
+  label { display:block; margin:12px 0 4px; font-weight:600 }
+  input { width:100%; background:#0b100d; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:9px 10px; font:inherit }
+  .hint { color:var(--muted); font-size:13px; margin-top:4px }
+  button { background:var(--green); color:#fff; border:0; border-radius:6px; padding:9px 16px; font:inherit; cursor:pointer; margin-top:14px }
+  button.secondary { background:#2c3a31 }
+  code { font-family:ui-monospace,Consolas,monospace; background:#0b100d; border:1px solid var(--line); border-radius:5px; padding:2px 6px; word-break:break-all }
+  .msg { margin-top:10px } .ok { color:var(--green) } .err { color:var(--red) }
+  table { width:100%; border-collapse:collapse } td, th { text-align:left; padding:6px; border-bottom:1px solid var(--line) }
+  .hidden { display:none }
+  a { color:#7fd18a }
+  ol { padding-left:20px } li { margin-bottom:6px }
+</style>
+</head>
+<body>
+<header><h1>⚙️ Beheer</h1><a href="/" style="color:var(--muted)">Naar de site</a> <button class="secondary hidden" id="logout" style="margin:0">Uitloggen</button></header>
+<main>
+  <!-- Eerste installatie -->
+  <section id="setup" class="hidden">
+    <div class="card">
+      <h2>Eerste installatie</h2>
+      <p>Bekijk de installatiecode op je VPS:</p>
+      <p><code>docker logs fs25-sabotage</code></p>
+      <label for="code">Installatiecode</label>
+      <input id="code" autocomplete="off">
+      <label for="pw1">Kies een beheerderswachtwoord</label>
+      <input id="pw1" type="password" autocomplete="new-password">
+      <div class="hint">Minstens 10 tekens. Hiermee kom je later weer op deze pagina.</div>
+      <button id="doSetup">Installeren</button>
+      <div class="msg" id="setupMsg"></div>
+    </div>
+  </section>
+
+  <!-- Inloggen -->
+  <section id="login" class="hidden">
+    <div class="card">
+      <h2>Inloggen als beheerder</h2>
+      <label for="pw">Wachtwoord</label>
+      <input id="pw" type="password" autocomplete="current-password">
+      <button id="doLogin">Inloggen</button>
+      <div class="msg" id="loginMsg"></div>
+    </div>
+  </section>
+
+  <!-- Instellingen -->
+  <section id="panel" class="hidden">
+    <div class="card">
+      <h2>Twitch-app</h2>
+      <ol>
+        <li>Ga naar <a href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener">dev.twitch.tv/console/apps</a> → <b>Register Your Application</b>.</li>
+        <li>OAuth Redirect URL: <code id="redirectUrl"></code></li>
+        <li>Categorie <i>Game Integration</i>, client type <i>Confidential</i>.</li>
+        <li>Vul hieronder de Client ID en een nieuw Client Secret in.</li>
+      </ol>
+      <label for="clientId">Client ID</label>
+      <input id="clientId" autocomplete="off">
+      <label for="clientSecret">Client Secret</label>
+      <input id="clientSecret" type="password" autocomplete="off">
+      <div class="hint" id="secretHint"></div>
+      <label for="baseUrl">Basisadres (optioneel)</label>
+      <input id="baseUrl" placeholder="">
+      <div class="hint">Leeg laten = automatisch, op basis van het domein dat Nginx Proxy Manager doorstuurt. Gevonden: <code id="detected"></code></div>
+      <button id="save">Opslaan</button>
+      <div class="msg" id="saveMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Twitch-koppelingen vernieuwen</h2>
+      <p class="hint">Nodig nadat je het domein of de Twitch-app hebt gewijzigd. Maakt de EventSub-koppelingen (bits, channel points) van alle streamers opnieuw aan.</p>
+      <button class="secondary" id="resub">Alles opnieuw koppelen</button>
+      <div class="msg" id="resubMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Streamers</h2>
+      <table><thead><tr><th>Kanaal</th><th>Hulpprogramma</th><th>Game</th></tr></thead><tbody id="streamers"></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>Wachtwoord wijzigen</h2>
+      <label for="newPw">Nieuw wachtwoord</label>
+      <input id="newPw" type="password" autocomplete="new-password">
+      <button class="secondary" id="changePw">Wijzigen</button>
+      <div class="msg" id="pwMsg"></div>
+    </div>
+  </section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+async function api(path, body) {
+  const res = await fetch(path, body === undefined ? {} : { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+function msg(el, text, ok) { el.className = 'msg ' + (ok ? 'ok' : 'err'); el.textContent = text; }
+
+async function load() {
+  const s = await api('/api/admin/state');
+  ['setup','login','panel'].forEach(id => $('#' + id).classList.add('hidden'));
+  $('#logout').classList.toggle('hidden', !s.loggedIn);
+  if (!s.setupDone) return $('#setup').classList.remove('hidden');
+  if (!s.loggedIn) return $('#login').classList.remove('hidden');
+  $('#panel').classList.remove('hidden');
+  $('#redirectUrl').textContent = s.redirectUrl;
+  $('#detected').textContent = s.detectedBaseUrl;
+  $('#baseUrl').placeholder = s.detectedBaseUrl;
+  $('#clientId').value = s.clientId;
+  $('#baseUrl').value = s.baseUrl;
+  $('#clientSecret').value = '';
+  $('#clientSecret').placeholder = s.clientSecretSet ? '•••••••• (ingesteld, leeg laten om te houden)' : '';
+  $('#secretHint').textContent = s.clientSecretSet ? 'Het secret wordt nooit getoond. Vul alleen in om het te vervangen.' : 'Nog niet ingesteld.';
+  $('#streamers').innerHTML = s.streamers.length
+    ? s.streamers.map(u => `<tr><td>${esc(u.displayName)}</td><td>${u.connected ? '🟢' : '⚪'}</td><td>${u.gameActive ? '🟢' : '⚪'}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="hint">Nog geen streamers.</td></tr>';
+}
+
+$('#doSetup').onclick = async () => {
+  try { await api('/api/admin/setup', { code:$('#code').value, password:$('#pw1').value }); load(); }
+  catch (e) { msg($('#setupMsg'), e.message); }
+};
+$('#doLogin').onclick = async () => {
+  try { await api('/api/admin/login', { password:$('#pw').value }); $('#pw').value = ''; load(); }
+  catch (e) { msg($('#loginMsg'), e.message); }
+};
+$('#pw').onkeydown = e => { if (e.key === 'Enter') $('#doLogin').click(); };
+$('#logout').onclick = async () => { await api('/api/admin/logout', {}); load(); };
+$('#save').onclick = async () => {
+  try {
+    await api('/api/admin/settings', { clientId:$('#clientId').value, clientSecret:$('#clientSecret').value, baseUrl:$('#baseUrl').value });
+    msg($('#saveMsg'), 'Opgeslagen ✔', true); load();
+  } catch (e) { msg($('#saveMsg'), e.message); }
+};
+$('#changePw').onclick = async () => {
+  try { await api('/api/admin/settings', { newPassword:$('#newPw').value }); $('#newPw').value = ''; msg($('#pwMsg'), 'Wachtwoord gewijzigd ✔', true); }
+  catch (e) { msg($('#pwMsg'), e.message); }
+};
+$('#resub').onclick = async () => {
+  msg($('#resubMsg'), 'Bezig…', true);
+  try {
+    const r = await api('/api/admin/resubscribe-all', {});
+    const bad = r.results.filter(x => !x.ok);
+    msg($('#resubMsg'), bad.length ? 'Fouten: ' + bad.map(x => `${x.login}: ${x.errors.join(', ')}`).join(' | ') : `Klaar (${r.results.length} streamers) ✔`, !bad.length);
+  } catch (e) { msg($('#resubMsg'), e.message); }
+};
+load();
+</script>
+</body>
+</html>

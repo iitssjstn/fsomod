@@ -1,34 +1,20 @@
-# Zet deze map op je VPS, bijvoorbeeld in /opt/fs25-sabotage, samen met een .env-bestand.
+# Losse compose voor FS25 Twitch Sabotage.
+# Heb je al een compose met Nginx Proxy Manager? Gebruik dan compose-snippet.yml.
 #
-#   Nginx Proxy Manager?       kopieer docker-compose.npm.yml naar docker-compose.override.yml, dan: docker compose up -d
-#   Heb je al nginx/Traefik?   docker compose up -d                     (app luistert op 127.0.0.1:3000)
-#   Nog geen webserver?        docker compose --profile caddy up -d     (Caddy regelt HTTPS automatisch)
+# Geen .env en geen geheimen nodig: Twitch-keys stel je in op https://<jouw-domein>/admin
+# (installatiecode staat in: docker logs fs25-sabotage)
 
 services:
   fs25-sabotage:
     image: ghcr.io/iitssjstn/fsomod:latest
+    container_name: fs25-sabotage
     restart: unless-stopped
-    env_file: .env
+    pull_policy: always
     volumes:
-      - ./data:/data
+      - fs25-sabotage-data:/data
     ports:
+      # alleen lokaal; je reverse proxy stuurt door naar poort 3000
       - "127.0.0.1:3000:3000"
 
-  caddy:
-    image: caddy:2.8.4-alpine
-    profiles: ["caddy"]
-    restart: unless-stopped
-    depends_on: [fs25-sabotage]
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-
 volumes:
-  caddy_data:
-  caddy_config:
+  fs25-sabotage-data:

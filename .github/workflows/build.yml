@@ -78,13 +78,6 @@ jobs:
           node-version: 22
       - run: npm ci
         working-directory: companion
-      - name: Server-URL inbouwen
-        working-directory: companion
-        env:
-          SERVER_URL: ${{ vars.SERVER_URL }}
-        run: |
-          if [ -z "$SERVER_URL" ]; then echo "::warning::Repository-variabele SERVER_URL is niet ingesteld; de .exe vraagt dan om localhost."; SERVER_URL=http://localhost:3000; fi
-          echo "{\"serverUrl\":\"$SERVER_URL\"}" > build-config.json
       - name: Bouwen met pkg
         working-directory: companion
         run: npx -y @yao-pkg/pkg@6.25.0 . --targets node22-win-x64 --output dist/FS25TwitchSabotage.exe --no-bytecode --public-packages "*" --public

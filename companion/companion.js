@@ -17,7 +17,18 @@ const WebSocket = require('ws');
 const VERSION = '1.0.0';
 let BUILD = {};
 try { BUILD = require('./build-config.json'); } catch {}
-const DEFAULT_SERVER = process.env.FS25TS_SERVER || BUILD.serverUrl || 'http://localhost:3000';
+const DEFAULT_SERVER = process.env.FS25TS_SERVER || BUILD.serverUrl || '';
+
+// De koppelcode van de website ziet eruit als "FS25-<base64>" en bevat serveradres + sleutel.
+function parsePairCode(code) {
+  code = String(code || '').trim();
+  if (!code.startsWith('FS25-')) return { pairKey: code };
+  try {
+    const [serverUrl, pairKey] = Buffer.from(code.slice(5), 'base64url').toString('utf8').split('|');
+    if (/^https?:\/\//.test(serverUrl) && pairKey) return { serverUrl, pairKey };
+  } catch {}
+  return { pairKey: '' };
+}
 const MOD_NAME = 'FS25_TwitchSabotage';
 const IS_WIN = process.platform === 'win32';
 
@@ -103,14 +114,16 @@ function writeAtomic(file, content) {
 async function main() {
   console.log(`\n  FS25 Twitch Sabotage hulpprogramma v${VERSION}\n  ------------------------------------------\n`);
   let cfg = flag('--reset') ? {} : loadConfig();
-  if (arg('--key')) cfg.pairKey = arg('--key');
+  if (arg('--key')) Object.assign(cfg, parsePairCode(arg('--key')));
   if (arg('--server')) cfg.serverUrl = arg('--server');
   if (arg('--game-dir')) cfg.gameDir = arg('--game-dir');
   cfg.serverUrl ||= DEFAULT_SERVER;
 
   const firstRun = !cfg.pairKey;
-  while (!cfg.pairKey) {
-    cfg.pairKey = await ask(`Plak je koppelcode van ${cfg.serverUrl} en druk op Enter:\n> `);
+  while (!cfg.pairKey || !cfg.serverUrl) {
+    const parsed = parsePairCode(await ask('Plak je koppelcode van de website en druk op Enter:\n> '));
+    if (!parsed.pairKey || !(parsed.serverUrl || cfg.serverUrl)) { say('Dat is geen geldige koppelcode. Kopieer hem opnieuw van de website.'); continue; }
+    Object.assign(cfg, parsed);
   }
 
   const gameDir = cfg.gameDir || process.env.FS25TS_GAME_DIR || findGameDir();
