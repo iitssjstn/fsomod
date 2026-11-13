@@ -5,7 +5,7 @@
 #   Nog geen webserver?        docker compose --profile caddy up -d     (Caddy regelt HTTPS automatisch)
 
 services:
-  app:
+  fs25-sabotage:
     image: ghcr.io/iitssjstn/fsomod:latest
     restart: unless-stopped
     env_file: .env
@@ -18,7 +18,7 @@ services:
     image: caddy:2.8.4-alpine
     profiles: ["caddy"]
     restart: unless-stopped
-    depends_on: [app]
+    depends_on: [fs25-sabotage]
     ports:
       - "80:80"
       - "443:443"

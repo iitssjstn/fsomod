@@ -8,7 +8,7 @@
 # In NPM: Proxy Host → Forward Hostname "fs25-sabotage", poort 3000, Websockets Support AAN.
 
 services:
-  app:
+  fs25-sabotage:
     container_name: fs25-sabotage
     networks:
       - default

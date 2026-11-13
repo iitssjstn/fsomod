@@ -1,6 +1,6 @@
 {$DOMAIN} {
 	encode gzip
-	reverse_proxy app:3000 {
+	reverse_proxy fs25-sabotage:3000 {
 		# nodig voor het live logboek en de OBS-overlay (Server-Sent Events)
 		flush_interval -1
 	}

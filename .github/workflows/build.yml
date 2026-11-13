@@ -174,6 +174,7 @@ jobs:
           script: |
             set -e
             cd "${{ vars.VPS_APP_DIR || '/opt/fs25-sabotage' }}"
-            docker compose pull
-            docker compose up -d
+            # Alleen deze service bijwerken; andere services in dezelfde compose blijven ongemoeid.
+            docker compose pull fs25-sabotage
+            docker compose up -d --no-deps fs25-sabotage
             docker image prune -f

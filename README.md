@@ -90,7 +90,10 @@ De Docker-image staat op GitHub Container Registry en is standaard **privé**. K
 docker login ghcr.io -u iitssjstn
 ```
 
-#### Met Nginx Proxy Manager (NPM)
+#### Al een docker-compose met Nginx Proxy Manager erin?
+Voeg het blok uit `deploy/compose-snippet.yml` toe aan je bestaande `docker-compose.yml`. Zet de vier `FS25_...`-geheimen in het `.env`-bestand ernaast. Zet op GitHub de variabele `VPS_APP_DIR` op de map van die compose. De deploy-workflow werkt alleen de service `fs25-sabotage` bij; je andere services blijven ongemoeid.
+
+#### Met Nginx Proxy Manager (NPM) in een aparte compose
 NPM draait zelf in Docker en kan `127.0.0.1:3000` van de host niet bereiken. Zet de app daarom in het netwerk van NPM:
 
 1. Zoek de naam van het NPM-netwerk op (vaak `npm_default` of `nginx-proxy-manager_default`) en zet die in `.env` als `NPM_NETWORK=...`:
