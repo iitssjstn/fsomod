@@ -45,6 +45,8 @@
   #log .t { color:var(--muted); font-size:12px; margin-right:6px }
   .ok { color:var(--green) } .fail { color:var(--red) } .sys { color:var(--muted) }
   .notice { padding:10px 12px; border-radius:6px; background:#2b2414; border:1px solid #5a4a1e; margin-bottom:12px }
+  .unsaved { position:sticky; bottom:12px; z-index:10; display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;
+             background:#3a2f12; border:1px solid #8a6d1e; border-radius:10px; padding:12px 16px; margin-bottom:18px; box-shadow:0 6px 24px rgba(0,0,0,.45) }
   .hidden { display:none }
   .modes { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px; margin-bottom:14px }
   .mode { display:block; border:1px solid var(--line); border-radius:8px; padding:12px; cursor:pointer }
@@ -137,7 +139,7 @@
       <p class="muted" style="margin-bottom:0">OBS-overlay (Browserbron, 600×200): <span class="key" id="overlayUrl" style="font-size:12px"></span></p>
     </div>
 
-    <div class="card">
+    <div class="card" id="actionsCard">
       <h2>Acties</h2>
       <div id="affiliateNotice" class="notice hidden">Je kanaal is (nog) geen Affiliate/Partner. Channel points werken dan niet, bits wel.</div>
       <div class="row">
@@ -169,6 +171,11 @@
         <button id="save">Opslaan &amp; beloningen bijwerken</button>
         <span id="saveMsg" class="muted"></span>
       </div>
+    </div>
+
+    <div id="unsaved" class="unsaved hidden">
+      <span>⚠️ Je hebt wijzigingen bij de acties die nog <b>niet zijn opgeslagen</b>.</span>
+      <span><button id="unsavedSave">Opslaan</button> <button class="secondary" id="unsavedUndo">Ongedaan maken</button></span>
     </div>
 
     <div class="card">
@@ -204,13 +211,9 @@ async function init() {
   $('#logout').onclick = async () => { await api('/auth/logout', { method:'POST' }); location.reload(); };
   $('#overlayUrl').textContent = me.overlayUrl;
   if (!me.broadcasterType) $('#affiliateNotice').classList.remove('hidden');
-  $('#bitsMode').value = me.config.bitsMode;
-  $('#gapSeconds').value = me.config.gapSeconds;
-  $('#pauseWhenOffline').checked = me.config.pauseWhenOffline;
-  $('#target').value = me.config.target || 'streamer';
   $('#playerName').value = me.config.playerName || '';
   renderLink();
-  renderActions();
+  fillSettings();
   setStatus(me.status);
   me.log.slice().reverse().forEach(addLog);
   const es = new EventSource('/api/stream');
@@ -280,19 +283,53 @@ function finishTest(id, ok) {
   }
 }
 
-$('#save').onclick = async () => {
-  const cfg = { actions:{}, bitsMode:$('#bitsMode').value, gapSeconds:$('#gapSeconds').value, pauseWhenOffline:$('#pauseWhenOffline').checked, target:$('#target').value, playerName:$('#playerName').value };
+// ---------- Instellingen van de acties: invullen, verzamelen, opslaan ----------
+function fillSettings() {
+  $('#bitsMode').value = me.config.bitsMode;
+  $('#gapSeconds').value = me.config.gapSeconds;
+  $('#pauseWhenOffline').checked = me.config.pauseWhenOffline;
+  $('#target').value = me.config.target || 'streamer';
+  renderActions();
+  markClean();
+}
+
+function collectConfig() {
+  const cfg = { actions:{}, bitsMode:$('#bitsMode').value, gapSeconds:$('#gapSeconds').value, pauseWhenOffline:$('#pauseWhenOffline').checked, target:$('#target').value };
   document.querySelectorAll('#actions tr[data-id]').forEach(tr => {
     const v = {};
-    tr.querySelectorAll('[data-f]').forEach(i => v[i.dataset.f] = i.type === 'checkbox' ? i.checked : i.value);
+    tr.querySelectorAll('[data-f]').forEach(i => v[i.dataset.f] = i.type === 'checkbox' ? i.checked : String(i.value));
     cfg.actions[tr.dataset.id] = v;
   });
+  return cfg;
+}
+
+// Niet-opgeslagen wijzigingen: balk onderaan + waarschuwing bij het verlaten van de pagina.
+let savedState = '';
+const isDirty = () => savedState !== '' && JSON.stringify(collectConfig()) !== savedState;
+function markClean() { savedState = JSON.stringify(collectConfig()); updateDirty(); }
+function updateDirty() { $('#unsaved').classList.toggle('hidden', !isDirty()); }
+$('#actionsCard').addEventListener('input', updateDirty);
+$('#actionsCard').addEventListener('change', updateDirty);
+window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+async function saveSettings() {
+  const cfg = { ...collectConfig(), playerName:$('#playerName').value };
+  for (const b of [$('#save'), $('#unsavedSave')]) b.disabled = true;
   $('#saveMsg').textContent = 'Bezig met opslaan…';
-  const r = await api('/api/config', { method:'POST', body:JSON.stringify(cfg) });
-  me.config = { ...me.config, ...cfg }; me.rewards = r.rewards;
-  $('#saveMsg').innerHTML = r.errors.length ? `<span class="fail">Opgeslagen, maar: ${r.errors.map(esc).join('<br>')}</span>` : '<span class="ok">Opgeslagen ✔</span>';
-  me = await api('/api/me'); renderActions();
-};
+  try {
+    const r = await api('/api/config', { method:'POST', body:JSON.stringify(cfg) });
+    $('#saveMsg').innerHTML = r.errors.length ? `<span class="fail">Opgeslagen, maar: ${r.errors.map(esc).join('<br>')}</span>` : '<span class="ok">Opgeslagen ✔</span>';
+    me = await api('/api/me');
+    fillSettings();
+  } catch (e) {
+    $('#saveMsg').innerHTML = '<span class="fail">Opslaan mislukt, probeer het opnieuw.</span>';
+  } finally {
+    for (const b of [$('#save'), $('#unsavedSave')]) b.disabled = false;
+  }
+}
+$('#save').onclick = saveSettings;
+$('#unsavedSave').onclick = saveSettings;
+$('#unsavedUndo').onclick = () => fillSettings();
 
 $('#showKey').onclick = () => { keyShown = !keyShown; $('#pairKey').textContent = keyShown ? me.pairCode : '••••••••••'; $('#showKey').textContent = keyShown ? 'Verbergen' : 'Tonen'; };
 $('#copyKey').onclick = async () => { await navigator.clipboard.writeText(me.pairCode); $('#copyKey').textContent = 'Gekopieerd!'; setTimeout(() => $('#copyKey').textContent = 'Kopiëren', 1500); };
