@@ -86,6 +86,8 @@ public sealed class MainForm : Form
         _pair.Click += (_, _) => Pair();
         _chooseDir.Click += (_, _) => ChooseDir();
         _autostart.Checked = AutostartEnabled();
+        // Bestaande autostart-regel (bijv. van een oudere versie of een verplaatste .exe) naar dit programma laten wijzen.
+        if (_autostart.Checked) SetAutostart(true);
         _autostart.CheckedChanged += (_, _) => SetAutostart(_autostart.Checked);
 
         _bridge.Log += line => Ui(() => AddLog(line));
