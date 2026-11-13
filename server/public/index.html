@@ -20,7 +20,8 @@
   .muted { color:var(--muted) }
   button, .btn { background:var(--green); color:#fff; border:0; border-radius:6px; padding:8px 14px; font:inherit; cursor:pointer; text-decoration:none; display:inline-block }
   button.secondary, .btn.secondary { background:#2c3a31 }
-  button.small { padding:4px 10px; font-size:13px }
+  button.small, .btn.small { padding:4px 10px; font-size:13px }
+  .notice .btn, .notice button { margin:4px 2px }
   button:disabled, button:disabled:hover { background:#1d2620; color:#5d6b62; cursor:not-allowed }
   .btn.twitch { background:var(--purple); font-size:17px; padding:12px 22px }
   code, .key { font-family:ui-monospace,Consolas,monospace; background:#0b100d; border:1px solid var(--line); border-radius:6px; padding:6px 10px; display:inline-block; word-break:break-all }
@@ -74,6 +75,7 @@
 
   <!-- Ingelogd -->
   <section id="loggedIn" class="hidden">
+    <div id="updates"></div>
     <div class="card">
       <h2>Hoe speel je?</h2>
       <div class="modes">
@@ -344,7 +346,37 @@ $('#savePlayer').onclick = async () => {
   $('#playerMsg').innerHTML = '<span class="ok">Opgeslagen ✔</span>';
 };
 
+// ---------- Update-meldingen ----------
+function renderUpdates(s) {
+  const out = [];
+  const L = s.latest || {};
+  if (s.modOutdated) {
+    if (s.linkKind === 'ftp') {
+      out.push(`<div class="notice"><b>⚠️ De mod op je server is verouderd</b> (v${esc(s.modVersion)}, nieuwste: v${esc(L.mod)}).<br>
+        Klik op <button class="small" data-update="installMod">Mod op server zetten</button> en herstart daarna de server via het webpanel.</div>`);
+    } else {
+      out.push(`<div class="notice"><b>⚠️ De mod is verouderd</b> (v${esc(s.modVersion)}, nieuwste: v${esc(L.mod)}).<br>
+        <a class="btn small" href="/downloads/FS25_TwitchSabotage.zip">Mod downloaden</a> en vervang de zip in <code>Documenten\\My Games\\FarmingSimulator2025\\mods</code>. Start daarna de savegame opnieuw.</div>`);
+    }
+  }
+  if (s.appOutdated) {
+    out.push(`<div class="notice"><b>⚠️ Het Windows-programma is verouderd</b> (v${esc(s.companionVersion)}, nieuwste: v${esc(L.app)}).<br>
+      <a class="btn small" href="/downloads/FS25TwitchSabotage.exe">Nieuwe versie downloaden</a>, sluit het oude programma (rechtsklik op het icoon bij de klok → Afsluiten) en start de nieuwe.</div>`);
+  }
+  const html = out.join('');
+  if ($('#updates').dataset.html === html) return; // niet steeds opnieuw tekenen
+  $('#updates').dataset.html = html;
+  $('#updates').innerHTML = html;
+  const btn = document.querySelector('[data-update=installMod]');
+  if (btn) btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = 'Uploaden…';
+    try { await postJson('/api/link/install-mod'); btn.textContent = '✔ Geüpload: herstart nu de server'; }
+    catch (e) { btn.disabled = false; btn.textContent = 'Mod op server zetten'; alert(e.message); }
+  };
+}
+
 function setStatus(s) {
+  renderUpdates(s);
   $('#dotCompanion').classList.toggle('on', s.companionConnected);
   $('#dotGame').classList.toggle('on', s.gameActive);
   $('#queueLen').textContent = s.queueLength;

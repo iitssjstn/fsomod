@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const db = require('./db');
 const twitch = require('./twitch');
 const { ACTIONS, BY_ID, mergeConfig } = require('./actions');
+const versions = require('./versions');
 
 const QUEUE_TIMEOUT_MS = 10 * 60_000; // channel points langer dan 10 min in de wachtrij → terugbetalen
 const RESULT_TIMEOUT_MS = 2 * 60_000; // geen antwoord van de game na 2 min → mislukt
@@ -63,7 +64,11 @@ function publicStatus(userId) {
   const c = ch(userId);
   return {
     companionConnected: !!c.ws, gameActive: c.gameActive, modVersion: c.modVersion,
+    companionVersion: c.companionVersion, linkKind: c.linkKind,
     queueLength: c.queue.length, pending: c.pending.size,
+    latest: versions.latest(),
+    modOutdated: versions.isOutdated(c.modVersion, versions.latest().mod),
+    appOutdated: c.linkKind === 'app' && versions.isOutdated(c.companionVersion, versions.latest().app),
   };
 }
 
@@ -147,14 +152,20 @@ function attachCompanion(user, ws, label = 'Hulpprogramma') {
   if (c.ws && c.ws !== ws) { try { c.ws.close(4000, 'Nieuwe verbinding'); } catch {} }
   c.ws = ws;
   if (!user.cmdEpoch) db.upsertUser(user.id, { cmdEpoch: crypto.randomBytes(4).toString('hex') });
-  ws.send(JSON.stringify({ type: 'hello', user: user.displayName, epoch: db.getUser(user.id).cmdEpoch }));
+  c.linkKind = label === 'Hulpprogramma' ? 'app' : 'ftp';
+  c.companionVersion = null;
+  const latest = versions.latest();
+  ws.send(JSON.stringify({ type: 'hello', user: user.displayName, epoch: db.getUser(user.id).cmdEpoch, latestApp: latest.app, latestMod: latest.mod }));
   // Opdrachten die al verstuurd waren maar nog geen resultaat hebben opnieuw sturen (mod negeert dubbele).
   for (const cmd of c.pending.values()) sendCommand(c, db.getUser(user.id), cmd);
   log(user.id, { kind: 'system', msg: `${label} verbonden` });
 
   ws.on('message', raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
-    if (m.type === 'status') setGameActive(user.id, !!m.gameActive, m.modVersion);
+    if (m.type === 'status') {
+      if (m.companionVersion && m.companionVersion !== 'ftp') c.companionVersion = String(m.companionVersion).slice(0, 20);
+      setGameActive(user.id, !!m.gameActive, m.modVersion);
+    }
     if (m.type === 'result') onResult(user.id, m);
   });
   ws.on('close', () => {

@@ -27,6 +27,13 @@ public sealed class Bridge : IDisposable
     public bool GameActive { get; private set; }
     public string? StreamerName { get; private set; }
     public string? ModVersion { get; private set; }
+    /// <summary>Nieuwste versie van dit programma volgens de server (null = onbekend).</summary>
+    public string? LatestAppVersion { get; private set; }
+    public bool UpdateAvailable => IsNewer(LatestAppVersion, Version);
+    public string? DownloadUrl => Config.ServerUrl is { } u ? $"{u.TrimEnd('/')}/downloads/FS25TwitchSabotage.exe" : null;
+
+    public static bool IsNewer(string? candidate, string? current) =>
+        System.Version.TryParse(candidate, out var a) && System.Version.TryParse(current, out var b) && a > b;
     public string? GameDir => Config.GameDir ?? GameLocator.Find();
 
     private readonly string _configDir;
@@ -178,6 +185,8 @@ public sealed class Bridge : IDisposable
         {
             case "hello":
                 SetEpoch(Str(m, "epoch"));
+                LatestAppVersion = Str(m, "latestApp") is { Length: > 0 } la ? la : null;
+                if (UpdateAvailable) Say($"Nieuwe versie beschikbaar: v{LatestAppVersion} (je hebt v{Version}).");
                 SetServer(true, Str(m, "user"));
                 Say($"Verbonden met de server als {StreamerName}");
                 WriteInbox();

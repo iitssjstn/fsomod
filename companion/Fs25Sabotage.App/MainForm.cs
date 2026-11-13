@@ -19,6 +19,12 @@ public sealed class MainForm : Form
     private readonly Button _chooseDir = new() { Text = "Map kiezen…", AutoSize = true };
     private readonly CheckBox _autostart = new() { Text = "Starten met Windows", AutoSize = true };
     private readonly ListBox _log = new() { Dock = DockStyle.Fill, IntegralHeight = false, HorizontalScrollbar = true };
+    private readonly LinkLabel _update = new()
+    {
+        Dock = DockStyle.Top, AutoSize = true, Visible = false, Padding = new Padding(10, 8, 10, 8), Margin = new Padding(0, 0, 0, 8),
+        BackColor = Color.FromArgb(255, 243, 205), ForeColor = Color.FromArgb(102, 77, 3), LinkColor = Color.FromArgb(0, 90, 160),
+    };
+    private bool _updateHintShown;
     private bool _reallyClose;
     private bool _trayHintShown;
 
@@ -42,7 +48,8 @@ public sealed class MainForm : Form
         _tray.DoubleClick += (_, _) => ShowFromTray();
 
         // --- Indeling ---
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(14), ColumnCount = 1, RowCount = 5 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(14), ColumnCount = 1, RowCount = 6 };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -74,16 +81,18 @@ public sealed class MainForm : Form
         var logBox = new GroupBox { Text = "Logboek", Dock = DockStyle.Fill, Padding = new Padding(8) };
         logBox.Controls.Add(_log);
 
-        root.Controls.Add(pairBox, 0, 0);
-        root.Controls.Add(statusBox, 0, 1);
-        root.Controls.Add(dirBox, 0, 2);
-        root.Controls.Add(_autostart, 0, 3);
-        root.Controls.Add(logBox, 0, 4);
+        root.Controls.Add(_update, 0, 0);
+        root.Controls.Add(pairBox, 0, 1);
+        root.Controls.Add(statusBox, 0, 2);
+        root.Controls.Add(dirBox, 0, 3);
+        root.Controls.Add(_autostart, 0, 4);
+        root.Controls.Add(logBox, 0, 5);
         Controls.Add(root);
 
         // --- Gedrag ---
         AcceptButton = _pair;
         _pair.Click += (_, _) => Pair();
+        _update.LinkClicked += (_, _) => OpenUrl(_bridge.DownloadUrl);
         _chooseDir.Click += (_, _) => ChooseDir();
         _autostart.Checked = AutostartEnabled();
         // Bestaande autostart-regel (bijv. van een oudere versie of een verplaatste .exe) naar dit programma laten wijzen.
@@ -156,6 +165,21 @@ public sealed class MainForm : Form
             : "niet actief: start FS25, zet de mod aan en laad een savegame");
 
         _gameDir.Text = _bridge.GameDir ?? "Niet gevonden. Kies de map handmatig.";
+
+        // Nieuwe versie beschikbaar?
+        _update.Visible = _bridge.UpdateAvailable;
+        if (_bridge.UpdateAvailable)
+        {
+            var text = $"Nieuwe versie v{_bridge.LatestAppVersion} beschikbaar (je hebt v{Bridge.Version}). Downloaden";
+            _update.Text = text;
+            _update.LinkArea = new LinkArea(text.Length - "Downloaden".Length, "Downloaden".Length);
+            if (!_updateHintShown)
+            {
+                _updateHintShown = true;
+                _tray.ShowBalloonTip(5000, "Update beschikbaar",
+                    $"FS25 Twitch Sabotage v{_bridge.LatestAppVersion} staat klaar. Open het programma om te downloaden.", ToolTipIcon.Info);
+            }
+        }
         _tray.Text = $"FS25 Twitch Sabotage: {(_bridge.ServerConnected && _bridge.GameActive ? "actief" : "niet actief")}";
     }
 
@@ -194,9 +218,10 @@ public sealed class MainForm : Form
         Activate();
     }
 
-    private void OpenWebsite()
+    private void OpenWebsite() => OpenUrl(_bridge.Config.ServerUrl);
+
+    private static void OpenUrl(string? url)
     {
-        var url = _bridge.Config.ServerUrl;
         if (url is null) return;
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
     }

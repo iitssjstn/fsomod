@@ -130,6 +130,12 @@ De deploy werkt **alleen de service `fs25-sabotage`** bij; andere services in de
 5. **Release** (alleen bij een tag `v*`): GitHub-release met de zip en de `.exe`.
 6. **Deploy**: SSH naar de VPS en alleen de service `fs25-sabotage` vernieuwen.
 
+**Update-meldingen:** het dashboard en het Windows-programma melden het als de mod of het programma ouder is dan de nieuwste versie. Verhoog daarom bij elke wijziging het versienummer:
+- mod: `TwitchSabotage.VERSION` in `mod/FS25_TwitchSabotage/scripts/TwitchSabotage.lua` (en `<version>` in `modDesc.xml`)
+- Windows-programma: `<Version>` in `companion/Directory.Build.props`
+
+Bij een tag `v*` krijgen beide automatisch het versienummer van de tag.
+
 Een nieuwe versie uitbrengen:
 
 ```bash

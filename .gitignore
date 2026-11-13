@@ -9,3 +9,4 @@ companion/build-config.json
 dist/
 companion/**/bin/
 companion/**/obj/
+server/downloads/versions.json
