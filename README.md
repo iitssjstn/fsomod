@@ -48,7 +48,7 @@ Een FS25-mod kan zelf geen internetverbinding maken. Daarom draait er bij de str
 | Willekeurige sabotage | `!random` | 150 | 1500 |
 | *Geldcadeau / Reparatie / Gratis tanken* | | *standaard uit* | |
 
-Alle prijzen, cooldowns en waarden past de streamer aan in het dashboard.
+Alle prijzen, cooldowns en waarden past de streamer aan in het dashboard. Per actie zet hij met een vinkje aan of die met **bits**, met **channel points** of met allebei gekocht kan worden.
 
 **Sabotage kan alleen met bits of channel points.** Een gewoon chatbericht als `!motor` doet niets. Het woord werkt alleen *in een cheer-bericht* (bijv. `Cheer300 !boete`) om te kiezen welke actie de kijker koopt. Cheert iemand zonder woord, dan kiest de server de duurste actie die past (of een willekeurige, instelbaar).
 

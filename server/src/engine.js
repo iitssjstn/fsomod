@@ -25,7 +25,7 @@ const configOf = user => mergeConfig(user.config);
 
 // ---------- Keuze van de actie bij bits ----------
 function pickForBits(cfg, bits, message = '') {
-  const enabled = ACTIONS.filter(a => cfg.actions[a.id]?.enabled && cfg.actions[a.id].bits > 0);
+  const enabled = ACTIONS.filter(a => cfg.actions[a.id]?.enabled && cfg.actions[a.id].useBits && cfg.actions[a.id].bits > 0);
   const price = a => cfg.actions[a.id].bits;
 
   const words = (message.match(/!([\p{L}\d_]+)/gu) || []).map(w => w.slice(1).toLowerCase());
@@ -231,7 +231,7 @@ async function syncRewards(user) {
   const errors = [];
   for (const a of ACTIONS) {
     const c = cfg.actions[a.id];
-    const want = c.enabled && c.points > 0;
+    const want = c.enabled && c.usePoints && c.points > 0;
     try {
       if (want) {
         const body = rewardBody(a, c);

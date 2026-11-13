@@ -34,6 +34,8 @@
   td input[type=number] { width:86px; background:#0b100d; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:5px }
   td .desc { font-size:12px; color:var(--muted) }
   td code { white-space:nowrap; padding:3px 7px }
+  .pay { display:flex; align-items:center; gap:6px; white-space:nowrap }
+  td input[type=number]:disabled { opacity:.35 }
   .group td { background:#121a15; font-weight:600; color:var(--amber) }
   select, .row input[type=number] { background:#0b100d; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:6px }
   .row { display:flex; gap:18px; flex-wrap:wrap; align-items:center; margin-bottom:12px }
@@ -154,10 +156,10 @@
       </div>
       <p class="muted">Sabotage kan <b>alleen</b> met bits of channel points. Een gewoon chatbericht als <code>!motor</code> doet niets.
         Wie met bits cheert, kan in hetzelfde cheer-bericht een woord zetten om te kiezen, bijvoorbeeld <code>Cheer100 !motor</code>. Zonder woord geldt de instelling hierboven.
-        Zet bits of punten op 0 om die betaalmanier voor een actie uit te schakelen.</p>
+        Vink per actie aan of hij met <b>bits</b>, met <b>channel points</b> of met allebei gekocht kan worden, en vul de prijs in.</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Aan</th><th>Actie</th><th>Woord in cheer</th><th>Bits</th><th>Punten</th><th>Cooldown (s)</th><th>Waarde</th><th></th></tr></thead>
+          <thead><tr><th>Aan</th><th>Actie</th><th>Woord in cheer</th><th>💎 Bits</th><th>🟣 Punten</th><th>Cooldown (s)</th><th>Waarde</th><th></th></tr></thead>
           <tbody id="actions"></tbody>
         </table>
       </div>
@@ -224,13 +226,17 @@ function renderActions() {
       <td><input type="checkbox" data-f="enabled" ${c.enabled ? 'checked' : ''}></td>
       <td><b>${esc(a.label)}</b>${reward}<div class="desc">${esc(a.desc)}</div></td>
       <td><code>!${esc(a.keyword)}</code></td>
-      <td><input type="number" min="0" data-f="bits" value="${c.bits}"></td>
-      <td><input type="number" min="0" data-f="points" value="${c.points}"></td>
+      <td><label class="pay" title="Kan met bits"><input type="checkbox" data-f="useBits" ${c.useBits ? 'checked' : ''}> <input type="number" min="1" data-f="bits" value="${c.bits}" ${c.useBits ? '' : 'disabled'}></label></td>
+      <td><label class="pay" title="Kan met channel points"><input type="checkbox" data-f="usePoints" ${c.usePoints ? 'checked' : ''}> <input type="number" min="1" data-f="points" value="${c.points}" ${c.usePoints ? '' : 'disabled'}></label></td>
       <td><input type="number" min="0" data-f="cooldown" value="${c.cooldown}"></td>
       <td>${a.paramLabel ? `<input type="number" data-f="param" value="${c.param ?? ''}"> <span class="desc">${esc(a.paramLabel)}</span>` : ''}</td>
       <td><button class="small secondary" data-test="${a.id}">Test</button></td>
     </tr>`);
   }
+  // Vinkje uit = prijsveld grijs.
+  tb.querySelectorAll('[data-f=useBits], [data-f=usePoints]').forEach(cb => cb.onchange = () => {
+    cb.closest('label').querySelector('input[type=number]').disabled = !cb.checked;
+  });
   tb.querySelectorAll('[data-test]').forEach(b => b.onclick = async () => {
     if (b.disabled) return;
     lockTest(b.dataset.test, 'Bezig…');

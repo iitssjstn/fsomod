@@ -344,8 +344,10 @@ app.post('/api/config', requireUser, async (req, res) => {
     if (!v) continue;
     cfg.actions[a.id] = {
       enabled: !!v.enabled,
-      bits: clampInt(v.bits, 0, 1_000_000),
-      points: clampInt(v.points, 0, 10_000_000),
+      useBits: v.useBits === undefined ? cfg.actions[a.id].useBits : !!v.useBits,
+      usePoints: v.usePoints === undefined ? cfg.actions[a.id].usePoints : !!v.usePoints,
+      bits: clampInt(v.bits, 1, 1_000_000),
+      points: clampInt(v.points, 1, 10_000_000),
       cooldown: clampInt(v.cooldown, 0, 604_800),
       param: v.param === null || v.param === undefined || v.param === '' ? (a.param ?? null) : Number(v.param),
     };

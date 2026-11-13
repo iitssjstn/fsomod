@@ -185,7 +185,7 @@ test('mislukte actie komt als failed in het logboek', async () => {
 test('config opslaan en valideren', async () => {
   const r = await fetch(`${BASE}/api/config`, {
     method: 'POST', headers: { cookie: sessionCookie(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ gapSeconds: 3, bitsMode: 'random', actions: { engine_off: { enabled: false, bits: -5, points: 10, cooldown: 1 } } }),
+    body: JSON.stringify({ gapSeconds: 3, bitsMode: 'random', actions: { engine_off: { enabled: false, useBits: true, usePoints: false, bits: -5, points: 10, cooldown: 1 } } }),
   });
   const j = await r.json();
   assert.equal(j.ok, true);
@@ -193,7 +193,9 @@ test('config opslaan en valideren', async () => {
   assert.equal(me.config.gapSeconds, 3);
   assert.equal(me.config.bitsMode, 'random');
   assert.equal(me.config.actions.engine_off.enabled, false);
-  assert.equal(me.config.actions.engine_off.bits, 0);
+  assert.equal(me.config.actions.engine_off.bits, 1);
+  assert.equal(me.config.actions.engine_off.useBits, true);
+  assert.equal(me.config.actions.engine_off.usePoints, false);
 });
 
 test('ongeldige koppelcode wordt geweigerd', async () => {

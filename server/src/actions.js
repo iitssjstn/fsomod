@@ -1,8 +1,8 @@
 // Alle sabotage-acties. De `id` moet exact overeenkomen met de handler in de FS25-mod
 // (mod/FS25_TwitchSabotage/scripts/TwitchSabotage.lua).
 //
-// bits    = minimaal aantal bits (0 = niet via bits)
-// points  = kosten in channel points (0 = geen beloning aanmaken)
+// useBits   = actie kan met bits;            bits   = minimaal aantal bits
+// usePoints = actie kan met channel points;  points = kosten in punten (er wordt een beloning aangemaakt)
 // cooldown = cooldown van de channel-points-beloning in seconden
 // param   = optionele waarde voor de actie (percentage, bedrag, seconden...)
 // keyword = wat een kijker in zijn cheer-bericht typt, bijv. "cheer100 !motor"
@@ -35,13 +35,13 @@ const ACTIONS = [
   // --- Boerderij & wereld ---
   { id: 'money_loss',     keyword: 'boete',     label: 'Boete',                 desc: 'Haalt geld van de boerderij af.',                           bits: 300,  points: 3000,  cooldown: 180, enabled: true, param: 5000, paramLabel: 'euro' },
   { id: 'time_warp',      keyword: 'tijd',      label: 'Tijdsprong',            desc: 'Tijd gaat X seconden lang op 120x snelheid.',               bits: 300,  points: 3000,  cooldown: 300, enabled: true, param: 20, paramLabel: 'seconden' },
-  { id: 'message',        keyword: 'bericht',   label: 'Bericht op scherm',     desc: 'Toont het bericht van de kijker groot in beeld.',           bits: 0,    points: 200,   cooldown: 30,  enabled: true, userInput: true },
+  { id: 'message',        keyword: 'bericht',   label: 'Bericht op scherm',     desc: 'Toont het bericht van de kijker groot in beeld.',           bits: 100,  points: 200,   cooldown: 30,  enabled: true, userInput: true, useBits: false },
   { id: 'random',         keyword: 'random',    label: 'Willekeurige sabotage', desc: 'Kiest een willekeurige andere actie.',                      bits: 150,  points: 1500,  cooldown: 60,  enabled: true },
 
   // --- Hulp (standaard uit) ---
-  { id: 'money_gift',     keyword: 'cadeau',    label: 'Geldcadeau',            desc: 'Geeft geld aan de boerderij.',                              bits: 0,    points: 0,     cooldown: 300, enabled: false, param: 5000, paramLabel: 'euro' },
-  { id: 'repair',         keyword: 'repareer',  label: 'Reparatie',             desc: 'Repareert en wast alles.',                                  bits: 0,    points: 0,     cooldown: 300, enabled: false },
-  { id: 'refuel',         keyword: 'tanken',    label: 'Gratis tanken',         desc: 'Tank weer vol.',                                            bits: 0,    points: 0,     cooldown: 300, enabled: false },
+  { id: 'money_gift',     keyword: 'cadeau',    label: 'Geldcadeau',            desc: 'Geeft geld aan de boerderij.',                              bits: 500,  points: 5000,  cooldown: 300, enabled: false, param: 5000, paramLabel: 'euro', useBits: false, usePoints: false },
+  { id: 'repair',         keyword: 'repareer',  label: 'Reparatie',             desc: 'Repareert en wast alles.',                                  bits: 500,  points: 5000,  cooldown: 300, enabled: false, useBits: false, usePoints: false },
+  { id: 'refuel',         keyword: 'tanken',    label: 'Gratis tanken',         desc: 'Tank weer vol.',                                            bits: 500,  points: 5000,  cooldown: 300, enabled: false, useBits: false, usePoints: false },
 ];
 
 const BY_ID = Object.fromEntries(ACTIONS.map(a => [a.id, a]));
@@ -51,6 +51,8 @@ function defaultConfig() {
   for (const a of ACTIONS) {
     actions[a.id] = {
       enabled: a.enabled,
+      useBits: a.useBits ?? true,
+      usePoints: a.usePoints ?? true,
       bits: a.bits,
       points: a.points,
       cooldown: a.cooldown,
@@ -73,7 +75,14 @@ function mergeConfig(cfg) {
   if (!cfg) return def;
   const out = { ...def, ...cfg, actions: { ...def.actions } };
   for (const id of Object.keys(def.actions)) {
-    if (cfg.actions && cfg.actions[id]) out.actions[id] = { ...def.actions[id], ...cfg.actions[id] };
+    const saved = cfg.actions && cfg.actions[id];
+    if (!saved) continue;
+    out.actions[id] = { ...def.actions[id], ...saved };
+    // Oudere instellingen zonder vinkjes: "0" betekende "niet via deze betaalmanier".
+    if (saved.useBits === undefined && saved.bits !== undefined) out.actions[id].useBits = saved.bits > 0;
+    if (saved.usePoints === undefined && saved.points !== undefined) out.actions[id].usePoints = saved.points > 0;
+    if (out.actions[id].bits <= 0) out.actions[id].bits = def.actions[id].bits || 100;
+    if (out.actions[id].points <= 0) out.actions[id].points = def.actions[id].points || 1000;
   }
   return out;
 }

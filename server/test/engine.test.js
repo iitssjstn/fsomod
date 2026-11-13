@@ -29,6 +29,20 @@ test('uitgeschakelde acties worden nooit gekozen', () => {
   assert.equal(pickForBits(cfg, 10000, 'Cheer10000 !motor').id, 'honk');
 });
 
+test('actie met bits uitgevinkt wordt nooit met bits gekozen', () => {
+  const cfg = defaultConfig();
+  cfg.actions.engine_off.useBits = false;
+  const a = pickForBits(cfg, 100, 'Cheer100 !motor');
+  assert.notEqual(a?.id, 'engine_off');
+});
+
+test('oude instellingen: 0 bits/punten wordt "vinkje uit"', () => {
+  const merged = mergeConfig({ actions: { honk: { enabled: true, bits: 0, points: 300, cooldown: 30 } } });
+  assert.equal(merged.actions.honk.useBits, false);
+  assert.equal(merged.actions.honk.usePoints, true);
+  assert.ok(merged.actions.honk.bits > 0); // prijs blijft bruikbaar als het vinkje later aan gaat
+});
+
 test('mergeConfig vult nieuwe acties aan', () => {
   const merged = mergeConfig({ actions: { honk: { enabled: false, bits: 1, points: 2, cooldown: 3 } }, gapSeconds: 9 });
   assert.equal(merged.gapSeconds, 9);
