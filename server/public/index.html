@@ -21,6 +21,7 @@
   button, .btn { background:var(--green); color:#fff; border:0; border-radius:6px; padding:8px 14px; font:inherit; cursor:pointer; text-decoration:none; display:inline-block }
   button.secondary, .btn.secondary { background:#2c3a31 }
   button.small { padding:4px 10px; font-size:13px }
+  button:disabled, button:disabled:hover { background:#1d2620; color:#5d6b62; cursor:not-allowed }
   .btn.twitch { background:var(--purple); font-size:17px; padding:12px 22px }
   code, .key { font-family:ui-monospace,Consolas,monospace; background:#0b100d; border:1px solid var(--line); border-radius:6px; padding:6px 10px; display:inline-block; word-break:break-all }
   .status { display:flex; gap:16px; flex-wrap:wrap }
@@ -231,11 +232,44 @@ function renderActions() {
     </tr>`);
   }
   tb.querySelectorAll('[data-test]').forEach(b => b.onclick = async () => {
-    const r = await api('/api/test/' + b.dataset.test, { method:'POST' });
-    if (r.error) alert(r.error);
-    else if (!r.status.companionConnected) alert('Toegevoegd aan de wachtrij, maar het hulpprogramma is niet verbonden.');
+    if (b.disabled) return;
+    lockTest(b.dataset.test, 'Bezig…');
+    let r;
+    try { r = await api('/api/test/' + b.dataset.test, { method:'POST' }); } catch { r = { error: 'Er ging iets mis.' }; }
+    if (r.error) { unlockTest(b.dataset.test); alert(r.error); return; }
+    const p = { actionId: b.dataset.test, action: r.action, param: r.param };
+    // Vangnet: na 3 minuten (zo lang wacht de server maximaal op de game) de knop altijd weer vrijgeven.
+    p.timer = setTimeout(() => finishTest(r.id, false), 3 * 60_000);
+    pendingTests.set(r.id, p);
+    if (!r.status.companionConnected) alert('Toegevoegd aan de wachtrij, maar er is geen verbinding met de game.');
     else if (!r.status.gameActive) alert('Toegevoegd aan de wachtrij, maar de game is niet actief (laad een savegame).');
   });
+  // Na opnieuw tekenen: knoppen van lopende tests blijven uit.
+  for (const p of pendingTests.values()) lockTest(p.actionId, 'Bezig…');
+  for (const id of runningEffects) lockTest(id, 'Loopt…');
+}
+
+// ---------- Testknoppen: uit tot de actie klaar is ----------
+const pendingTests = new Map();   // opdracht-id -> { actionId, action, param, timer }
+const runningEffects = new Set(); // acties waarvan het effect nog loopt
+const TIMED = new Set(['engine_lock', 'disco', 'honk', 'time_warp']);
+function testBtn(actionId) { return document.querySelector(`[data-test="${actionId}"]`); }
+function lockTest(actionId, text) { const b = testBtn(actionId); if (b) { b.disabled = true; b.textContent = text; } }
+function unlockTest(actionId) { const b = testBtn(actionId); if (b) { b.disabled = false; b.textContent = 'Test'; } }
+function finishTest(id, ok) {
+  const p = pendingTests.get(id);
+  if (!p) return;
+  pendingTests.delete(id);
+  clearTimeout(p.timer);
+  const secs = ok && TIMED.has(p.action) ? Number(p.param) || 0 : 0;
+  if (secs > 0) {
+    // Effect duurt nog even (disco, toeteren, ...): pas vrijgeven als het voorbij is.
+    runningEffects.add(p.actionId);
+    lockTest(p.actionId, 'Loopt…');
+    setTimeout(() => { runningEffects.delete(p.actionId); unlockTest(p.actionId); }, secs * 1000);
+  } else {
+    unlockTest(p.actionId);
+  }
 }
 
 $('#save').onclick = async () => {
@@ -255,7 +289,10 @@ $('#save').onclick = async () => {
 $('#showKey').onclick = () => { keyShown = !keyShown; $('#pairKey').textContent = keyShown ? me.pairCode : '••••••••••'; $('#showKey').textContent = keyShown ? 'Verbergen' : 'Tonen'; };
 $('#copyKey').onclick = async () => { await navigator.clipboard.writeText(me.pairCode); $('#copyKey').textContent = 'Gekopieerd!'; setTimeout(() => $('#copyKey').textContent = 'Kopiëren', 1500); };
 $('#newKey').onclick = async () => { if (!confirm('Nieuwe koppelcode maken? Het hulpprogramma moet dan opnieuw gekoppeld worden.')) return; me.pairCode = (await api('/api/pairkey', { method:'POST' })).pairCode; if (keyShown) $('#pairKey').textContent = me.pairCode; };
-$('#clearQueue').onclick = () => api('/api/clear-queue', { method:'POST' });
+$('#clearQueue').onclick = async () => {
+  await api('/api/clear-queue', { method:'POST' });
+  for (const id of [...pendingTests.keys()]) finishTest(id, false);
+};
 $('#resub').onclick = async () => { const r = await api('/api/resubscribe', { method:'POST' }); alert(r.results.map(x => `${x.type}: ${x.ok ? 'OK' : x.error}`).join('\n')); };
 
 // ---------- Verbinding met de game ----------
@@ -308,6 +345,7 @@ function setStatus(s) {
 }
 
 function addLog(e) {
+  if (e.kind === 'done' || e.kind === 'failed') finishTest(e.id, e.kind === 'done');
   const time = new Date(e.time).toLocaleTimeString('nl-NL');
   const src = e.source === 'bits' ? `💎 ${e.amount} bits` : e.source === 'points' ? `🟣 ${e.amount} punten` : e.source === 'test' ? '🧪 test' : '';
   let html;

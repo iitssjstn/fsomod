@@ -373,7 +373,7 @@ app.post('/api/pairkey', requireUser, (req, res) => {
 app.post('/api/test/:action', requireUser, (req, res) => {
   const cmd = engine.enqueue(req.user, { actionId: req.params.action, viewer: `${req.user.displayName} (test)`, source: 'test', text: 'Testbericht vanaf het dashboard' });
   if (!cmd) return res.status(400).json({ error: 'Onbekende of uitgeschakelde actie' });
-  res.json({ ok: true, status: engine.publicStatus(req.user.id) });
+  res.json({ ok: true, id: cmd.id, action: cmd.action, param: cmd.param, status: engine.publicStatus(req.user.id) });
 });
 
 app.post('/api/resubscribe', requireUser, async (req, res) => {
