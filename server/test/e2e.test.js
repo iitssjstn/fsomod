@@ -85,7 +85,18 @@ function sessionCookie() {
 }
 
 // Geen Twitch-keys of geheimen via omgevingsvariabelen: alleen poort en datamap.
-const env = { PORT: String(PORT), DATA_DIR: dataDir };
+const downloadsDir = path.join(tmp, 'downloads');
+fs.mkdirSync(downloadsDir, { recursive: true });
+// Echte mod-zip maken van de bronbestanden (zoals de workflow doet).
+require('node:child_process').execFileSync('python3', ['-c', `
+import zipfile, os, sys
+src, out = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(out, 'w') as z:
+    for root, _, files in os.walk(src):
+        for f in files:
+            full = os.path.join(root, f); z.write(full, os.path.relpath(full, src))
+`, path.join(__dirname, '..', '..', 'mod', 'FS25_TwitchSabotage'), path.join(downloadsDir, 'FS25_TwitchSabotage.zip')]);
+const env = { PORT: String(PORT), DATA_DIR: dataDir, DOWNLOADS_DIR: downloadsDir };
 let server; let adminCookie = '';
 
 test('server start zonder configuratie', async () => {
@@ -199,6 +210,23 @@ test('config opslaan en valideren', async () => {
   assert.equal(me.config.actions.engine_off.bits, 1);
   assert.equal(me.config.actions.engine_off.useBits, true);
   assert.equal(me.config.actions.engine_off.usePoints, false);
+});
+
+test('mod bijwerken via het Windows-programma: nieuwe zip, oude "(1)"-kopie naar back-up', async () => {
+  const mods = path.join(gameDir, 'mods');
+  fs.mkdirSync(mods, { recursive: true });
+  fs.writeFileSync(path.join(mods, 'FS25_TwitchSabotage.zip'), 'oud');
+  fs.writeFileSync(path.join(mods, 'FS25_TwitchSabotage (1).zip'), 'oud2');
+  fs.writeFileSync(path.join(mods, 'AndereMod.zip'), 'blijft');
+  const r = await fetch(`${BASE}/api/app/install-mod`, { method: 'POST', headers: { cookie: sessionCookie() } });
+  const j = await r.json();
+  assert.equal(r.status, 200, JSON.stringify(j));
+  assert.match(j.message, /v\d+\.\d+\.\d+/);
+  assert.deepEqual(fs.readdirSync(mods).sort(), ['AndereMod.zip', 'FS25_TwitchSabotage.zip']);
+  assert.deepEqual(fs.readFileSync(path.join(mods, 'FS25_TwitchSabotage.zip')), fs.readFileSync(path.join(downloadsDir, 'FS25_TwitchSabotage.zip')));
+  const backups = path.join(modDir, 'oude-versies');
+  const moved = fs.readdirSync(backups).flatMap(d => fs.readdirSync(path.join(backups, d)));
+  assert.deepEqual(moved, ['FS25_TwitchSabotage (1).zip']);
 });
 
 test('ongeldige koppelcode wordt geweigerd', async () => {

@@ -17,6 +17,7 @@ public sealed class MainForm : Form
     private readonly StatusRow _game = new("Game");
     private readonly Label _gameDir = new() { AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(420, 0) };
     private readonly Button _chooseDir = new() { Text = "Map kiezen…", AutoSize = true };
+    private readonly Button _updateMod = new() { Text = "Mod installeren / bijwerken", AutoSize = true };
     private readonly CheckBox _autostart = new() { Text = "Starten met Windows", AutoSize = true };
     private readonly ListBox _log = new() { Dock = DockStyle.Fill, IntegralHeight = false, HorizontalScrollbar = true };
     private readonly LinkLabel _update = new()
@@ -75,7 +76,10 @@ public sealed class MainForm : Form
         var dirBox = new GroupBox { Text = "Farming Simulator 25-map", Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(10) };
         var dirFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
         dirFlow.Controls.Add(_gameDir);
-        dirFlow.Controls.Add(_chooseDir);
+        var dirButtons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+        dirButtons.Controls.Add(_chooseDir);
+        dirButtons.Controls.Add(_updateMod);
+        dirFlow.Controls.Add(dirButtons);
         dirBox.Controls.Add(dirFlow);
 
         var logBox = new GroupBox { Text = "Logboek", Dock = DockStyle.Fill, Padding = new Padding(8) };
@@ -94,6 +98,13 @@ public sealed class MainForm : Form
         _pair.Click += (_, _) => Pair();
         _update.LinkClicked += (_, _) => OpenUrl(_bridge.DownloadUrl);
         _chooseDir.Click += (_, _) => ChooseDir();
+        _updateMod.Click += async (_, _) =>
+        {
+            _updateMod.Enabled = false;
+            var (ok, msg) = await _bridge.InstallModAsync();
+            _updateMod.Enabled = true;
+            MessageBox.Show(this, msg, ok ? "Mod bijgewerkt" : "Bijwerken lukt niet", MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        };
         _autostart.Checked = AutostartEnabled();
         // Bestaande autostart-regel (bijv. van een oudere versie of een verplaatste .exe) naar dit programma laten wijzen.
         if (_autostart.Checked) SetAutostart(true);
@@ -165,6 +176,7 @@ public sealed class MainForm : Form
             : "niet actief: start FS25, zet de mod aan en laad een savegame");
 
         _gameDir.Text = _bridge.GameDir ?? "Niet gevonden. Kies de map handmatig.";
+        _updateMod.Visible = _bridge.IsPaired && _bridge.GameDir is not null;
 
         // Nieuwe versie beschikbaar?
         _update.Visible = _bridge.UpdateAvailable;

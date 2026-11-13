@@ -74,6 +74,28 @@ async function resolveDirs(client, cfg) {
   return { profile: profile || '/', modDir, modsDir: `${profile}/mods` };
 }
 
+// Alle "mods"-mappen op de FTP met daarin een Twitch Sabotage-mod (om dubbele/oude kopieën te vinden).
+async function findModCopies(client) {
+  const copies = []; const modsDirs = [];
+  const queue = [{ path: '/', depth: 0 }];
+  let listed = 0;
+  while (queue.length && listed < 120) {
+    const { path, depth } = queue.shift();
+    let entries;
+    try { entries = await client.list(path); } catch { continue; }
+    listed++;
+    const base = path.replace(/\/$/, '');
+    if (/\/mods$/i.test(base)) {
+      modsDirs.push(base);
+      for (const e of entries) {
+        if (/twitch.?sabotage/i.test(e.name)) copies.push({ path: `${base}/${e.name}`, size: e.size, date: e.modifiedAt ? e.modifiedAt.toISOString() : (e.rawModifiedAt || '') });
+      }
+    }
+    if (depth < 5) for (const e of entries) if (e.isDirectory && !e.name.startsWith('.')) queue.push({ path: `${base}/${e.name}`, depth: depth + 1 });
+  }
+  return { modsDirs, copies };
+}
+
 // Test vanaf het dashboard: verbinden, map zoeken, kijken of de mod al gedraaid heeft.
 async function testConnection(cfg) {
   const client = await connect(cfg);
@@ -84,7 +106,11 @@ async function testConnection(cfg) {
     try { modRan = (await client.list(dirs.modDir)).some(e => e.name === 'outbox.xml'); } catch {}
     let modInstalled = false;
     try { modInstalled = (await client.list(dirs.modsDir)).some(e => e.name === `${MOD_NAME}.zip` || e.name === MOD_NAME); } catch {}
-    return { ok: true, profile: dirs.profile, modInstalled, modRan, secure: client.ftp.socket?.encrypted === true };
+    let outboxVersion = null;
+    try { outboxVersion = ((await download(client, `${dirs.modDir}/outbox.xml`)).match(/<outbox\b[^>]*version="([^"]*)"/) || [])[1] || null; } catch {}
+    await client.cd('/');
+    const found = await findModCopies(client);
+    return { ok: true, profile: dirs.profile, modsDir: dirs.modsDir, modInstalled, modRan, outboxVersion, ...found, secure: client.ftp.socket?.encrypted === true };
   } finally { client.close(); }
 }
 

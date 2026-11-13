@@ -167,6 +167,10 @@ function attachCompanion(user, ws, label = 'Hulpprogramma') {
       setGameActive(user.id, !!m.gameActive, m.modVersion);
     }
     if (m.type === 'result') onResult(user.id, m);
+    if (m.type === 'installResult') {
+      const waiter = c.installWaiters?.get(m.requestId);
+      if (waiter) { c.installWaiters.delete(m.requestId); waiter({ ok: !!m.ok, message: String(m.msg || '') }); }
+    }
   });
   ws.on('close', () => {
     if (c.ws !== ws) return;
@@ -200,6 +204,23 @@ function schedulePause(userId) {
       await twitch.updateReward(user, rewardId, { is_paused: paused }).catch(e => console.error('[pause]', e.message));
     }
   }, 15_000);
+}
+
+// ---------- Mod laten installeren door het Windows-programma ----------
+const MIN_APP_FOR_INSTALL = '1.3.0';
+function requestModInstall(userId) {
+  const c = ch(userId);
+  if (!c.ws || c.linkKind !== 'app') return Promise.resolve({ ok: false, message: 'Het Windows-programma is niet verbonden. Start het programma op je pc.' });
+  if (!c.companionVersion || versions.isOutdated(c.companionVersion, MIN_APP_FOR_INSTALL)) {
+    return Promise.resolve({ ok: false, needsAppUpdate: true, message: 'Je Windows-programma is te oud om de mod zelf bij te werken. Download eerst de nieuwe versie van het programma.' });
+  }
+  const requestId = crypto.randomBytes(6).toString('hex');
+  c.installWaiters ||= new Map();
+  return new Promise(resolve => {
+    const timer = setTimeout(() => { c.installWaiters.delete(requestId); resolve({ ok: false, message: 'Het Windows-programma reageerde niet op tijd.' }); }, 120_000);
+    c.installWaiters.set(requestId, r => { clearTimeout(timer); resolve(r); });
+    c.ws.send(JSON.stringify({ type: 'installMod', requestId }));
+  });
 }
 
 // ---------- Timeouts ----------
@@ -292,6 +313,6 @@ function onRedemption(user, ev) {
 }
 
 module.exports = {
-  ch, pickForBits, enqueue, pump, onResult, attachCompanion, publicStatus, syncRewards,
+  ch, pickForBits, enqueue, requestModInstall, pump, onResult, attachCompanion, publicStatus, syncRewards,
   onCheer, onRedemption, configOf, log, schedulePause,
 };

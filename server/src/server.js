@@ -327,6 +327,12 @@ app.post('/api/link/test', requireUser, async (req, res) => {
   catch (e) { res.status(400).json({ error: `Verbinding mislukt: ${e.message}` }); }
 });
 
+// Singleplayer: het Windows-programma downloadt de mod en zet hem in de mods-map.
+app.post('/api/app/install-mod', requireUser, async (req, res) => {
+  const r = await engine.requestModInstall(req.user.id);
+  res.status(r.ok ? 200 : 400).json(r.ok ? r : { error: r.message, needsAppUpdate: !!r.needsAppUpdate });
+});
+
 app.post('/api/link/install-mod', requireUser, async (req, res) => {
   const f = req.user.link?.ftp;
   if (!ftpComplete(f)) return res.status(400).json({ error: 'Vul eerst de FTP-gegevens in.' });

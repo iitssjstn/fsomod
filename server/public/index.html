@@ -133,6 +133,7 @@
         <span class="pill"><span class="dot" id="dotCompanion"></span> <span id="linkLabel">Verbinding</span></span>
         <span class="pill"><span class="dot" id="dotGame"></span> Game actief</span>
         <span class="pill">Wachtrij: <b id="queueLen">0</b></span>
+        <span class="pill">Mod: <b id="modVer">onbekend</b></span>
         <button class="small secondary" id="clearQueue">Wachtrij legen</button>
         <button class="small secondary" id="resub">Twitch opnieuw koppelen</button>
       </div>
@@ -369,7 +370,11 @@ $('#ftpSave').onclick = async () => {
     const t = await postJson('/api/link/test');
     msg.innerHTML = `<span class="ok">✔ Verbonden${t.secure ? ' (versleuteld)' : ''}</span><br>Map: <code>${esc(t.profile)}</code><br>`
       + (t.modInstalled ? '✔ Mod staat op de server' : '✖ Mod staat nog niet op de server (stap 2)') + '<br>'
-      + (t.modRan ? '✔ Mod heeft al gedraaid op de server' : 'ℹ Mod heeft nog niet gedraaid: herstart de server en laad de savegame');
+      + (t.modRan ? `✔ Mod heeft al gedraaid op de server${t.outboxVersion ? ` (laatst gemelde versie: v${esc(t.outboxVersion)})` : ''}` : 'ℹ Mod heeft nog niet gedraaid: herstart de server en laad de savegame')
+      + `<br><br><b>Twitch Sabotage-mods op de FTP:</b><br>`
+      + (t.copies.length ? t.copies.map(c => `<code>${esc(c.path)}</code> ${Math.round((c.size || 0) / 1024)} kB ${esc((c.date || '').slice(0, 16).replace('T', ' '))}`).join('<br>') : 'geen gevonden')
+      + (t.copies.length > 1 ? '<br><span class="fail">Er staan meerdere kopieën: verwijder de oude, anders kan de server die laden.</span>' : '')
+      + `<br><span class="muted">Mods-mappen gevonden: ${t.modsDirs.map(d => `<code>${esc(d)}</code>`).join(', ') || 'geen'}. De knop "Mod op server zetten" uploadt naar <code>${esc(t.modsDir)}</code>.</span>`;
   } catch (e) { msg.innerHTML = `<span class="fail">${esc(e.message)}</span>`; }
 };
 $('#installMod').onclick = async () => {
@@ -393,7 +398,9 @@ function renderUpdates(s) {
         Klik op <button class="small" data-update="installMod">Mod op server zetten</button> en herstart daarna de server via het webpanel.</div>`);
     } else {
       out.push(`<div class="notice"><b>⚠️ De mod is verouderd</b> (v${esc(s.modVersion)}, nieuwste: v${esc(L.mod)}).<br>
-        <a class="btn small" href="/downloads/FS25_TwitchSabotage.zip">Mod downloaden</a> en vervang de zip in <code>Documenten\\My Games\\FarmingSimulator2025\\mods</code>. Start daarna de savegame opnieuw.</div>`);
+        Sluit Farming Simulator 25 helemaal af en klik op <button class="small" data-update="appInstallMod">Mod bijwerken</button>. Het Windows-programma zet de nieuwe mod dan op de goede plek.<br>
+        <span class="muted">Lukt dat niet? <a href="/downloads/FS25_TwitchSabotage.zip">Download de mod</a> en zet hem in <code>Documenten\\My Games\\FarmingSimulator2025\\mods</code> met precies de naam <code>FS25_TwitchSabotage.zip</code>, dus zonder "(1)". Verwijder andere Twitch Sabotage-bestanden uit die map.
+        De melding verdwijnt zodra de nieuwe mod draait.</span></div>`);
     }
   }
   if (s.appOutdated) {
@@ -404,6 +411,12 @@ function renderUpdates(s) {
   if ($('#updates').dataset.html === html) return; // niet steeds opnieuw tekenen
   $('#updates').dataset.html = html;
   $('#updates').innerHTML = html;
+  const appBtn = document.querySelector('[data-update=appInstallMod]');
+  if (appBtn) appBtn.onclick = async () => {
+    appBtn.disabled = true; appBtn.textContent = 'Bezig…';
+    try { const r = await postJson('/api/app/install-mod'); appBtn.textContent = '✔ Bijgewerkt'; alert(r.message); }
+    catch (e) { appBtn.disabled = false; appBtn.textContent = 'Mod bijwerken'; alert(e.message); }
+  };
   const btn = document.querySelector('[data-update=installMod]');
   if (btn) btn.onclick = async () => {
     btn.disabled = true; btn.textContent = 'Uploaden…';
@@ -414,6 +427,7 @@ function renderUpdates(s) {
 
 function setStatus(s) {
   renderUpdates(s);
+  $('#modVer').textContent = s.modVersion ? 'v' + s.modVersion : 'onbekend';
   $('#dotCompanion').classList.toggle('on', s.companionConnected);
   $('#dotGame').classList.toggle('on', s.gameActive);
   $('#queueLen').textContent = s.queueLength;

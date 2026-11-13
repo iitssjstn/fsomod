@@ -1,4 +1,6 @@
+using System.IO.Compression;
 using System.Net.WebSockets;
+using System.Text.RegularExpressions;
 using System.Text;
 using System.Text.Json;
 using System.Xml;
@@ -205,6 +207,14 @@ public sealed class Bridge : IDisposable
             case "error":
                 Say($"Fout van de server: {Str(m, "message")}");
                 break;
+            case "installMod":
+                var requestId = Str(m, "requestId");
+                _ = Task.Run(async () =>
+                {
+                    var (ok, msg) = await InstallModAsync();
+                    await Send(new { type = "installResult", requestId, ok, msg });
+                });
+                break;
         }
     }
 
@@ -230,6 +240,76 @@ public sealed class Bridge : IDisposable
     }
 
     private Task SendStatus() => Send(new { type = "status", gameActive = GameActive, modVersion = ModVersion, companionVersion = Version });
+
+    // ------------------------------------------------------------------ Mod installeren / bijwerken
+
+    private static readonly Regex ModCopyName = new("twitch.?sabotage", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Downloadt de nieuwste mod van de website en zet hem als mods\FS25_TwitchSabotage.zip neer.
+    /// Oude kopieën met een andere naam (bijv. "FS25_TwitchSabotage (1).zip") gaan naar een back-upmap.
+    /// </summary>
+    public async Task<(bool Ok, string Message)> InstallModAsync()
+    {
+        try
+        {
+            var game = GameDir;
+            if (game is null || !Directory.Exists(game)) return Fail("De FS25-map is niet gevonden. Kies hem eerst in het programma.");
+            if (Config.ServerUrl is null) return Fail("Nog niet gekoppeld met de website.");
+
+            Say("Mod downloaden…");
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+            var bytes = await http.GetByteArrayAsync($"{Config.ServerUrl.TrimEnd('/')}/downloads/{ModName}.zip");
+            string? version;
+            try { version = ReadModVersion(bytes); }
+            catch { return Fail("De gedownloade mod is ongeldig."); }
+
+            var mods = Path.Combine(game, "mods");
+            Directory.CreateDirectory(mods);
+            var target = Path.Combine(mods, $"{ModName}.zip");
+
+            // Oude kopieën onder een andere naam opruimen (verplaatsen, niet verwijderen).
+            var backup = Path.Combine(game, "modSettings", ModName, "oude-versies", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+            var moved = new List<string>();
+            foreach (var entry in Directory.EnumerateFileSystemEntries(mods))
+            {
+                var name = Path.GetFileName(entry);
+                if (!ModCopyName.IsMatch(name) || string.Equals(entry, target, StringComparison.OrdinalIgnoreCase)) continue;
+                Directory.CreateDirectory(backup);
+                var dest = Path.Combine(backup, name);
+                if (Directory.Exists(entry)) Directory.Move(entry, dest); else File.Move(entry, dest);
+                moved.Add(name);
+            }
+
+            var tmp = target + ".download";
+            await File.WriteAllBytesAsync(tmp, bytes);
+            try { File.Move(tmp, target, overwrite: true); }
+            catch (IOException)
+            {
+                try { File.Delete(tmp); } catch { }
+                return Fail("Farming Simulator 25 is nog open. Sluit het spel helemaal af en probeer het opnieuw.");
+            }
+
+            var msg = $"Mod bijgewerkt naar v{version ?? "?"}." + (moved.Count > 0 ? $" Oude kopieën verplaatst: {string.Join(", ", moved)}." : "")
+                + " Start Farming Simulator 25 opnieuw.";
+            Say(msg);
+            return (true, msg);
+        }
+        catch (IOException) { return Fail("Farming Simulator 25 is nog open. Sluit het spel helemaal af en probeer het opnieuw."); }
+        catch (UnauthorizedAccessException) { return Fail("Geen toegang tot de mods-map. Sluit Farming Simulator 25 en probeer het opnieuw."); }
+        catch (Exception e) { return Fail($"Bijwerken mislukt: {e.Message}"); }
+
+        (bool, string) Fail(string m) { Say(m); return (false, m); }
+    }
+
+    private static string? ReadModVersion(byte[] zip)
+    {
+        using var archive = new ZipArchive(new MemoryStream(zip), ZipArchiveMode.Read);
+        var lua = archive.GetEntry("scripts/TwitchSabotage.lua") ?? throw new InvalidDataException("geen mod");
+        using var reader = new StreamReader(lua.Open());
+        var m = Regex.Match(reader.ReadToEnd(), "TwitchSabotage\\.VERSION\\s*=\\s*\"([^\"]+)\"");
+        return m.Success ? m.Groups[1].Value : null;
+    }
 
     // ------------------------------------------------------------------ Bestanden
 

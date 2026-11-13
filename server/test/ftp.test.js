@@ -96,6 +96,16 @@ test('mod met één klik op de server zetten', async () => {
   assert.equal(fs.readFileSync(path.join(profile, 'mods', 'FS25_TwitchSabotage.zip'), 'utf8'), 'nep-zip');
   const t = await (await post('/api/link/test')).json();
   assert.equal(t.modInstalled, true);
+  assert.deepEqual(t.copies.map(c => c.path), ['/fs25/profile/mods/FS25_TwitchSabotage.zip']);
+  assert.ok(t.modsDirs.includes('/fs25/profile/mods'));
+});
+
+test('oude kopie in een tweede mods-map wordt gevonden', async () => {
+  fs.mkdirSync(path.join(ftpRoot, 'modspace', 'mods'), { recursive: true });
+  fs.writeFileSync(path.join(ftpRoot, 'modspace', 'mods', 'FS25_TwitchSabotage_oud.zip'), 'oud');
+  const t = await (await post('/api/link/test')).json();
+  assert.equal(t.copies.length, 2);
+  assert.ok(t.copies.some(c => c.path === '/modspace/mods/FS25_TwitchSabotage_oud.zip'));
 });
 
 test('game wordt actief zodra de mod op de server draait (hartslag via FTP)', async () => {
