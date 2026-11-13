@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FS25 Twitch Sabotage</title>
+<style>
+  :root { --bg:#0f1512; --card:#18211c; --line:#2a372f; --text:#e8efe9; --muted:#93a399; --green:#4caf50; --red:#e5534b; --amber:#d9a441; --purple:#9147ff; }
+  * { box-sizing:border-box }
+  body { margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text) }
+  header { display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid var(--line) }
+  header h1 { font-size:18px; margin:0; flex:1 }
+  header img { width:32px; height:32px; border-radius:50% }
+  main { max-width:1100px; margin:0 auto; padding:20px 16px 60px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:18px }
+  .card h2 { margin:0 0 12px; font-size:16px }
+  .steps { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px }
+  .step { border:1px solid var(--line); border-radius:8px; padding:14px }
+  .step b { display:block; margin-bottom:6px }
+  .muted { color:var(--muted) }
+  button, .btn { background:var(--green); color:#fff; border:0; border-radius:6px; padding:8px 14px; font:inherit; cursor:pointer; text-decoration:none; display:inline-block }
+  button.secondary, .btn.secondary { background:#2c3a31 }
+  button.small { padding:4px 10px; font-size:13px }
+  .btn.twitch { background:var(--purple); font-size:17px; padding:12px 22px }
+  code, .key { font-family:ui-monospace,Consolas,monospace; background:#0b100d; border:1px solid var(--line); border-radius:6px; padding:6px 10px; display:inline-block; word-break:break-all }
+  .status { display:flex; gap:16px; flex-wrap:wrap }
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:20px; background:#0b100d; border:1px solid var(--line) }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--red) } .dot.on { background:var(--green) }
+  .table-wrap { overflow-x:auto }
+  table { width:100%; border-collapse:collapse; min-width:760px }
+  th, td { text-align:left; padding:7px 6px; border-bottom:1px solid var(--line); vertical-align:middle }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted) }
+  td input[type=number] { width:86px; background:#0b100d; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:5px }
+  td .desc { font-size:12px; color:var(--muted) }
+  td code { white-space:nowrap; padding:3px 7px }
+  .group td { background:#121a15; font-weight:600; color:var(--amber) }
+  select, .row input[type=number] { background:#0b100d; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:6px }
+  .row { display:flex; gap:18px; flex-wrap:wrap; align-items:center; margin-bottom:12px }
+  #log { list-style:none; margin:0; padding:0; max-height:380px; overflow:auto }
+  #log li { padding:6px 0; border-bottom:1px solid var(--line); font-size:14px }
+  #log .t { color:var(--muted); font-size:12px; margin-right:6px }
+  .ok { color:var(--green) } .fail { color:var(--red) } .sys { color:var(--muted) }
+  .notice { padding:10px 12px; border-radius:6px; background:#2b2414; border:1px solid #5a4a1e; margin-bottom:12px }
+  .hidden { display:none }
+  .hero { text-align:center; padding:60px 20px }
+  .hero h2 { font-size:28px; margin:0 0 10px }
+</style>
+</head>
+<body>
+<header>
+  <h1>🚜 FS25 Twitch Sabotage</h1>
+  <span id="who"></span>
+</header>
+<main>
+  <!-- Niet ingelogd -->
+  <section id="loggedOut" class="hidden">
+    <div class="card hero">
+      <h2>Laat je kijkers je boerderij saboteren</h2>
+      <p class="muted">Bits en channel points zetten je motor uit, koppelen je maaier los, laten je lading verdwijnen en nog veel meer.</p>
+      <p><a class="btn twitch" href="/auth/login">Inloggen met Twitch</a></p>
+    </div>
+  </section>
+
+  <!-- Ingelogd -->
+  <section id="loggedIn" class="hidden">
+    <div class="card">
+      <h2>In 3 stappen klaar</h2>
+      <div class="steps">
+        <div class="step"><b>1. Download de mod</b>
+          <span class="muted">Zet de zip (niet uitpakken) in<br><code>Documenten\My Games\FarmingSimulator2025\mods</code></span><br><br>
+          <a class="btn secondary" href="/downloads/FS25_TwitchSabotage.zip">Mod downloaden</a></div>
+        <div class="step"><b>2. Download het hulpprogramma</b>
+          <span class="muted">Start het en plak je koppelcode. Daarna start het automatisch.</span><br><br>
+          <a class="btn secondary" href="/downloads/FS25TwitchSabotage.exe">Hulpprogramma (Windows)</a></div>
+        <div class="step"><b>3. Je koppelcode</b>
+          <span class="muted">Geheim houden! Niet laten zien op stream.</span><br>
+          <span class="key" id="pairKey">••••••••••</span>
+          <div style="margin-top:8px"><button class="small secondary" id="showKey">Tonen</button> <button class="small secondary" id="copyKey">Kopiëren</button> <button class="small secondary" id="newKey">Nieuwe code</button></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Status</h2>
+      <div class="status">
+        <span class="pill"><span class="dot" id="dotCompanion"></span> Hulpprogramma</span>
+        <span class="pill"><span class="dot" id="dotGame"></span> Game actief</span>
+        <span class="pill">Wachtrij: <b id="queueLen">0</b></span>
+        <button class="small secondary" id="clearQueue">Wachtrij legen</button>
+        <button class="small secondary" id="resub">Twitch opnieuw koppelen</button>
+      </div>
+      <p class="muted" style="margin-bottom:0">OBS-overlay (Browserbron, 600×200): <span class="key" id="overlayUrl" style="font-size:12px"></span></p>
+    </div>
+
+    <div class="card">
+      <h2>Acties</h2>
+      <div id="affiliateNotice" class="notice hidden">Je kanaal is (nog) geen Affiliate/Partner. Channel points werken dan niet, bits wel.</div>
+      <div class="row">
+        <label>Bij bits zonder !woord:
+          <select id="bitsMode">
+            <option value="highest">Duurste actie die past</option>
+            <option value="random">Willekeurige actie die past</option>
+            <option value="keyword_only">Niets (alleen met !woord)</option>
+          </select></label>
+        <label>Minimaal <input type="number" id="gapSeconds" min="0" max="600" style="width:70px"> sec tussen sabotages</label>
+        <label><input type="checkbox" id="pauseWhenOffline"> Beloningen pauzeren als de game niet draait</label>
+      </div>
+      <p class="muted">Sabotage kan <b>alleen</b> met bits of channel points. Een gewoon chatbericht als <code>!motor</code> doet niets.
+        Wie met bits cheert, kan in hetzelfde cheer-bericht een woord zetten om te kiezen, bijvoorbeeld <code>Cheer100 !motor</code>. Zonder woord geldt de instelling hierboven.
+        Zet bits of punten op 0 om die betaalmanier voor een actie uit te schakelen.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Aan</th><th>Actie</th><th>Woord in cheer</th><th>Bits</th><th>Punten</th><th>Cooldown (s)</th><th>Waarde</th><th></th></tr></thead>
+          <tbody id="actions"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:10px; align-items:center">
+        <button id="save">Opslaan &amp; beloningen bijwerken</button>
+        <span id="saveMsg" class="muted"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Logboek</h2>
+      <ul id="log"></ul>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const GROUPS = { engine_off:'Motor & rijden', detach_one:'Werktuigen', lights_off:'Licht & geluid', money_loss:'Boerderij & wereld', money_gift:'Hulp (geen sabotage)' };
+let me, actions, keyShown = false;
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (res.status === 401) throw new Error('401');
+  return res.json();
+}
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+async function init() {
+  actions = await api('/api/actions');
+  try { me = await api('/api/me'); } catch { $('#loggedOut').classList.remove('hidden'); return; }
+  $('#loggedIn').classList.remove('hidden');
+  $('#who').innerHTML = `<img src="${esc(me.avatar)}" alt="" style="vertical-align:middle"> ${esc(me.displayName)} <button class="small secondary" id="logout">Uitloggen</button>`;
+  $('#logout').onclick = async () => { await api('/auth/logout', { method:'POST' }); location.reload(); };
+  $('#overlayUrl').textContent = me.overlayUrl;
+  if (!me.broadcasterType) $('#affiliateNotice').classList.remove('hidden');
+  $('#bitsMode').value = me.config.bitsMode;
+  $('#gapSeconds').value = me.config.gapSeconds;
+  $('#pauseWhenOffline').checked = me.config.pauseWhenOffline;
+  renderActions();
+  setStatus(me.status);
+  me.log.slice().reverse().forEach(addLog);
+  const es = new EventSource('/api/stream');
+  es.onmessage = e => addLog(JSON.parse(e.data));
+  es.addEventListener('status', e => setStatus(JSON.parse(e.data)));
+}
+
+function renderActions() {
+  const tb = $('#actions'); tb.innerHTML = '';
+  for (const a of actions) {
+    if (GROUPS[a.id]) tb.insertAdjacentHTML('beforeend', `<tr class="group"><td colspan="8">${GROUPS[a.id]}</td></tr>`);
+    const c = me.config.actions[a.id];
+    const reward = me.rewards[a.id] ? ' ✅' : '';
+    tb.insertAdjacentHTML('beforeend', `<tr data-id="${a.id}">
+      <td><input type="checkbox" data-f="enabled" ${c.enabled ? 'checked' : ''}></td>
+      <td><b>${esc(a.label)}</b>${reward}<div class="desc">${esc(a.desc)}</div></td>
+      <td><code>!${esc(a.keyword)}</code></td>
+      <td><input type="number" min="0" data-f="bits" value="${c.bits}"></td>
+      <td><input type="number" min="0" data-f="points" value="${c.points}"></td>
+      <td><input type="number" min="0" data-f="cooldown" value="${c.cooldown}"></td>
+      <td>${a.paramLabel ? `<input type="number" data-f="param" value="${c.param ?? ''}"> <span class="desc">${esc(a.paramLabel)}</span>` : ''}</td>
+      <td><button class="small secondary" data-test="${a.id}">Test</button></td>
+    </tr>`);
+  }
+  tb.querySelectorAll('[data-test]').forEach(b => b.onclick = async () => {
+    const r = await api('/api/test/' + b.dataset.test, { method:'POST' });
+    if (r.error) alert(r.error);
+    else if (!r.status.companionConnected) alert('Toegevoegd aan de wachtrij, maar het hulpprogramma is niet verbonden.');
+    else if (!r.status.gameActive) alert('Toegevoegd aan de wachtrij, maar de game is niet actief (laad een savegame).');
+  });
+}
+
+$('#save').onclick = async () => {
+  const cfg = { actions:{}, bitsMode:$('#bitsMode').value, gapSeconds:$('#gapSeconds').value, pauseWhenOffline:$('#pauseWhenOffline').checked };
+  document.querySelectorAll('#actions tr[data-id]').forEach(tr => {
+    const v = {};
+    tr.querySelectorAll('[data-f]').forEach(i => v[i.dataset.f] = i.type === 'checkbox' ? i.checked : i.value);
+    cfg.actions[tr.dataset.id] = v;
+  });
+  $('#saveMsg').textContent = 'Bezig met opslaan…';
+  const r = await api('/api/config', { method:'POST', body:JSON.stringify(cfg) });
+  me.config = { ...me.config, ...cfg }; me.rewards = r.rewards;
+  $('#saveMsg').innerHTML = r.errors.length ? `<span class="fail">Opgeslagen, maar: ${r.errors.map(esc).join('<br>')}</span>` : '<span class="ok">Opgeslagen ✔</span>';
+  me = await api('/api/me'); renderActions();
+};
+
+$('#showKey').onclick = () => { keyShown = !keyShown; $('#pairKey').textContent = keyShown ? me.pairKey : '••••••••••'; $('#showKey').textContent = keyShown ? 'Verbergen' : 'Tonen'; };
+$('#copyKey').onclick = async () => { await navigator.clipboard.writeText(me.pairKey); $('#copyKey').textContent = 'Gekopieerd!'; setTimeout(() => $('#copyKey').textContent = 'Kopiëren', 1500); };
+$('#newKey').onclick = async () => { if (!confirm('Nieuwe koppelcode maken? Het hulpprogramma moet dan opnieuw gekoppeld worden.')) return; me.pairKey = (await api('/api/pairkey', { method:'POST' })).pairKey; if (keyShown) $('#pairKey').textContent = me.pairKey; };
+$('#clearQueue').onclick = () => api('/api/clear-queue', { method:'POST' });
+$('#resub').onclick = async () => { const r = await api('/api/resubscribe', { method:'POST' }); alert(r.results.map(x => `${x.type}: ${x.ok ? 'OK' : x.error}`).join('\n')); };
+
+function setStatus(s) {
+  $('#dotCompanion').classList.toggle('on', s.companionConnected);
+  $('#dotGame').classList.toggle('on', s.gameActive);
+  $('#queueLen').textContent = s.queueLength;
+}
+
+function addLog(e) {
+  const time = new Date(e.time).toLocaleTimeString('nl-NL');
+  const src = e.source === 'bits' ? `💎 ${e.amount} bits` : e.source === 'points' ? `🟣 ${e.amount} punten` : e.source === 'test' ? '🧪 test' : '';
+  let html;
+  if (e.kind === 'system') html = `<span class="sys">${esc(e.msg)}</span>`;
+  else if (e.kind === 'queued') html = `⏳ <b>${esc(e.viewer)}</b> ${src}: ${esc(e.label)}`;
+  else if (e.kind === 'done') html = `<span class="ok">✔</span> <b>${esc(e.viewer)}</b>: ${esc(e.label)} ${e.msg ? `<span class="muted">(${esc(e.msg)})</span>` : ''}`;
+  else if (e.kind === 'failed') html = `<span class="fail">✖</span> <b>${esc(e.viewer)}</b>: ${esc(e.label)} <span class="muted">(${esc(e.msg)}${e.source === 'points' ? ', punten terug' : ''})</span>`;
+  else html = `<span class="sys">${esc(e.viewer)} ${src}: ${esc(e.msg)}</span>`;
+  $('#log').insertAdjacentHTML('afterbegin', `<li><span class="t">${time}</span>${html}</li>`);
+}
+
+init();
+</script>
+</body>
+</html>

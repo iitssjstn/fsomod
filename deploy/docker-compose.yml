@@ -1,0 +1,33 @@
+# Zet deze map op je VPS, bijvoorbeeld in /opt/fs25-sabotage, samen met een .env-bestand.
+#
+#   Heb je al nginx/Traefik?   docker compose up -d                     (app luistert op 127.0.0.1:3000)
+#   Nog geen webserver?        docker compose --profile caddy up -d     (Caddy regelt HTTPS automatisch)
+
+services:
+  app:
+    image: ghcr.io/iitssjstn/fsomod:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    profiles: ["caddy"]
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

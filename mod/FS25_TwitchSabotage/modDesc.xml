@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<modDesc descVersion="105">
+    <author>iitssjstn</author>
+    <version>1.0.0.0</version>
+    <title>
+        <en>Twitch Sabotage</en>
+        <de>Twitch Sabotage</de>
+        <nl>Twitch Sabotage</nl>
+    </title>
+    <description>
+        <en><![CDATA[Let your Twitch viewers sabotage your farm with Bits and Channel Points: engine off, detach implements, lose cargo, fines, disco lights and more.
+
+Requires the free FS25 Twitch Sabotage companion app and an account on the website.]]></en>
+        <de><![CDATA[Lass deine Twitch-Zuschauer deinen Hof mit Bits und Kanalpunkten sabotieren: Motor aus, Geräte abkoppeln, Ladung verlieren, Strafen und mehr.
+
+Benötigt das kostenlose FS25 Twitch Sabotage Hilfsprogramm.]]></de>
+        <nl><![CDATA[Laat je Twitch-kijkers je boerderij saboteren met bits en channel points: motor uit, werktuig ontkoppelen, lading kwijt, boetes, disco en meer.
+
+Vereist het gratis FS25 Twitch Sabotage hulpprogramma.]]></nl>
+    </description>
+    <iconFilename>icon_TwitchSabotage.dds</iconFilename>
+    <multiplayer supported="true"/>
+    <extraSourceFiles>
+        <sourceFile filename="scripts/TwitchSabotage.lua"/>
+    </extraSourceFiles>
+</modDesc>

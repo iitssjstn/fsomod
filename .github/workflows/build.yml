@@ -1,0 +1,179 @@
+name: Build, test & deploy
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  # ---------------------------------------------------------------- tests
+  test-server:
+    name: Test server + hulpprogramma
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: companion
+      - run: npm ci
+        working-directory: server
+      - run: npm test
+        working-directory: server
+
+  test-mod:
+    name: Test FS25-mod (Lua)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y lua5.1 libxml2-utils zip
+      - name: Lua syntax
+        run: luac5.1 -p mod/FS25_TwitchSabotage/scripts/*.lua
+      - name: modDesc.xml geldig
+        run: xmllint --noout mod/FS25_TwitchSabotage/modDesc.xml
+      - name: Mod-logica (nagebootste FS25-omgeving)
+        run: lua5.1 mod/tests/mod_test.lua
+
+  # ---------------------------------------------------------------- builds
+  build-mod:
+    name: Mod-zip bouwen
+    needs: test-mod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Versie in modDesc zetten (bij tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          sed -i "s#<version>.*</version>#<version>${V}.0</version>#" mod/FS25_TwitchSabotage/modDesc.xml
+          sed -i "s#TwitchSabotage.VERSION = \".*\"#TwitchSabotage.VERSION = \"${V}\"#" mod/FS25_TwitchSabotage/scripts/TwitchSabotage.lua
+      - name: Zip (modDesc.xml moet in de root van de zip staan)
+        run: |
+          mkdir -p dist
+          cd mod/FS25_TwitchSabotage
+          zip -r -X ../../dist/FS25_TwitchSabotage.zip . -x '*.DS_Store'
+          unzip -l ../../dist/FS25_TwitchSabotage.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mod
+          path: dist/FS25_TwitchSabotage.zip
+
+  build-companion:
+    name: Hulpprogramma (.exe) bouwen
+    needs: test-server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: companion
+      - name: Server-URL inbouwen
+        working-directory: companion
+        env:
+          SERVER_URL: ${{ vars.SERVER_URL }}
+        run: |
+          if [ -z "$SERVER_URL" ]; then echo "::warning::Repository-variabele SERVER_URL is niet ingesteld; de .exe vraagt dan om localhost."; SERVER_URL=http://localhost:3000; fi
+          echo "{\"serverUrl\":\"$SERVER_URL\"}" > build-config.json
+      - name: Bouwen met pkg
+        working-directory: companion
+        run: npx -y @yao-pkg/pkg@6.25.0 . --targets node22-win-x64 --output dist/FS25TwitchSabotage.exe --no-bytecode --public-packages "*" --public
+      - uses: actions/upload-artifact@v4
+        with:
+          name: companion
+          path: companion/dist/FS25TwitchSabotage.exe
+
+  # ---------------------------------------------------------------- docker
+  docker:
+    name: Docker-image bouwen
+    needs: [build-mod, build-companion]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: mod
+          path: server/downloads
+      - uses: actions/download-artifact@v4
+        with:
+          name: companion
+          path: server/downloads
+      - run: ls -la server/downloads
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+            type=ref,event=pr
+      - uses: docker/build-push-action@v6
+        with:
+          context: server
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------- release
+  release:
+    name: GitHub-release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-mod, build-companion]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/FS25_TwitchSabotage.zip
+            dist/FS25TwitchSabotage.exe
+          generate_release_notes: true
+
+  # ---------------------------------------------------------------- deploy
+  deploy:
+    name: Deploy naar VPS
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && vars.DEPLOY_ENABLED == 'true'
+    needs: docker
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            set -e
+            cd "${{ vars.VPS_APP_DIR || '/opt/fs25-sabotage' }}"
+            docker compose pull
+            docker compose up -d
+            docker image prune -f

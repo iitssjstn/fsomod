@@ -1,0 +1,9 @@
+node_modules/
+server/data/
+server/downloads/*.zip
+server/downloads/*.exe
+companion/dist/
+companion/build-config.json
+.env
+*.log
+dist/

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Sabotage overlay</title>
+<style>
+  html, body { margin:0; background:transparent; overflow:hidden; font-family:system-ui,Segoe UI,Roboto,sans-serif }
+  #stack { position:fixed; left:12px; right:12px; bottom:12px; display:flex; flex-direction:column; gap:8px }
+  .toast { background:rgba(20,28,23,.92); color:#fff; border-left:6px solid #4caf50; border-radius:8px; padding:12px 16px; font-size:22px;
+           box-shadow:0 4px 18px rgba(0,0,0,.4); animation:in .35s ease-out, out .5s ease-in 6.5s forwards }
+  .toast small { display:block; font-size:15px; opacity:.75 }
+  .toast.bits { border-color:#9147ff } .toast.failed { border-color:#e5534b; opacity:.85 }
+  @keyframes in { from { transform:translateY(30px); opacity:0 } }
+  @keyframes out { to { transform:translateY(10px); opacity:0 } }
+</style>
+</head>
+<body>
+<div id="stack"></div>
+<script>
+const key = new URLSearchParams(location.search).get('key');
+const stack = document.getElementById('stack');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+function toast(e) {
+  if (e.kind !== 'done' && e.kind !== 'failed') return;
+  const src = e.source === 'bits' ? `${e.amount} bits` : e.source === 'points' ? `${e.amount} punten` : 'test';
+  const el = document.createElement('div');
+  el.className = `toast ${e.source === 'bits' ? 'bits' : ''} ${e.kind === 'failed' ? 'failed' : ''}`;
+  el.innerHTML = `🚜 <b>${esc(e.viewer)}</b> → ${esc(e.label)}<small>${src}${e.kind === 'failed' ? ' · mislukt' : ''}</small>`;
+  stack.appendChild(el);
+  setTimeout(() => el.remove(), 7200);
+  while (stack.children.length > 4) stack.firstChild.remove();
+}
+const es = new EventSource('/overlay/stream?key=' + encodeURIComponent(key));
+es.onmessage = m => toast(JSON.parse(m.data));
+</script>
+</body>
+</html>
