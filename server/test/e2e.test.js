@@ -160,7 +160,10 @@ test('cheer zonder woord → duurste actie die past (100 bits)', async () => {
   await fetch(`${BASE}/eventsub`, { method: 'POST', headers: signed(body), body });
   await waitFor(() => executed.length >= 2);
   const last = executed[executed.length - 1];
-  assert.ok(['engine_off', 'cruise_slow', 'implement_off', 'implement_lift'].includes(last), last);
+  const { defaultConfig } = require('../src/actions');
+  const d = defaultConfig().actions;
+  const at100 = Object.keys(d).filter(id => d[id].enabled && d[id].useBits && d[id].bits === 100);
+  assert.ok(at100.includes(last), `${last} niet in ${at100}`);
 });
 
 test('dubbel event (zelfde message-id) wordt maar één keer uitgevoerd', async () => {
