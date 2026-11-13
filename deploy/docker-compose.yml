@@ -1,5 +1,6 @@
 # Zet deze map op je VPS, bijvoorbeeld in /opt/fs25-sabotage, samen met een .env-bestand.
 #
+#   Nginx Proxy Manager?       kopieer docker-compose.npm.yml naar docker-compose.override.yml, dan: docker compose up -d
 #   Heb je al nginx/Traefik?   docker compose up -d                     (app luistert op 127.0.0.1:3000)
 #   Nog geen webserver?        docker compose --profile caddy up -d     (Caddy regelt HTTPS automatisch)
 

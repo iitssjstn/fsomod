@@ -76,7 +76,7 @@ Vereist: Docker met de compose-plugin, en een (sub)domein dat naar je VPS wijst.
 sudo mkdir -p /opt/fs25-sabotage && cd /opt/fs25-sabotage
 ```
 
-Kopieer `deploy/docker-compose.yml`, `deploy/Caddyfile` en `deploy/.env.example` naar die map, en hernoem `.env.example` naar `.env`. Vul daarna `.env` in. Willekeurige geheimen maak je zo:
+Kopieer `deploy/docker-compose.yml` en `deploy/.env.example` naar die map (plus `deploy/Caddyfile` als je Caddy gebruikt), en hernoem `.env.example` naar `.env`. Vul daarna `.env` in. Willekeurige geheimen maak je zo:
 
 ```bash
 openssl rand -hex 32
@@ -90,7 +90,29 @@ De Docker-image staat op GitHub Container Registry en is standaard **privé**. K
 docker login ghcr.io -u iitssjstn
 ```
 
-Starten. Heb je nog geen webserver, gebruik dan Caddy (regelt HTTPS automatisch):
+#### Met Nginx Proxy Manager (NPM)
+NPM draait zelf in Docker en kan `127.0.0.1:3000` van de host niet bereiken. Zet de app daarom in het netwerk van NPM:
+
+1. Zoek de naam van het NPM-netwerk op (vaak `npm_default` of `nginx-proxy-manager_default`) en zet die in `.env` als `NPM_NETWORK=...`:
+   ```bash
+   docker network ls
+   ```
+2. Kopieer `deploy/docker-compose.npm.yml` naar de VPS als `docker-compose.override.yml`. `docker compose` en de deploy-workflow lezen het dan automatisch mee.
+3. Start de app:
+   ```bash
+   docker compose up -d
+   ```
+4. Maak in NPM een **Proxy Host** aan:
+   - **Details**: domeinnaam, scheme `http`, Forward Hostname `fs25-sabotage`, Forward Port `3000`, **Websockets Support aan** (nodig voor het hulpprogramma), Block Common Exploits aan.
+   - **SSL**: *Request a new SSL Certificate*, **Force SSL** aan, HTTP/2 aan.
+   - **Advanced**, voor het live logboek en de OBS-overlay:
+     ```nginx
+     proxy_buffering off;
+     proxy_read_timeout 1h;
+     ```
+
+#### Zonder NPM
+Heb je nog geen webserver, gebruik dan Caddy (regelt HTTPS automatisch):
 
 ```bash
 docker compose --profile caddy up -d
