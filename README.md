@@ -1,4 +1,4 @@
-# 🚜 FS25 Twitch Sabotage
+# FS25 Twitch Sabotage
 
 Laat Twitch-kijkers een Farming Simulator 25-stream saboteren met **bits** en **channel points**: motor uit, maaier ontkoppelen, lading kwijt, boetes, disco-lichten en nog veel meer.
 
@@ -148,14 +148,14 @@ git push origin v1.0.1
 
 ## Twitch-extensie: bits met één klik
 
-Met de extensie hoeven kijkers niets te typen. Onder de stream (paneel) en in beeld (overlay, knop "🚜 Sabotage") staan knoppen zoals *Motor uit 💎 100*. De kijker klikt, Twitch toont het bevestigingsvenster voor de bits, en de sabotage gebeurt. Draait de game niet, dan zijn de knoppen grijs. Cheers met `!woord` blijven ook werken.
+Met de extensie hoeven kijkers niets te typen. Onder de stream (paneel) en in beeld (overlay, knop "Sabotage") staan knoppen zoals *Motor uit, 100 bits*. De kijker klikt, Twitch toont het bevestigingsvenster voor de bits, en de sabotage gebeurt. Draait de game niet, dan zijn de knoppen grijs. Cheers met `!woord` blijven ook werken.
 
 Instellen (eenmalig, via `/admin` op de website):
 1. Maak op [dev.twitch.tv/console/extensions](https://dev.twitch.tv/console/extensions) een extensie aan met de types **Panel** en **Video - Fullscreen**.
 2. **Asset Hosting**: Panel Viewer Path `panel.html` (hoogte 500), Video Fullscreen Viewer Path `video_overlay.html`, Config Path `config.html`.
 3. **Capabilities**: zet bij *Allowlist for URL Fetching Domains* het adres van je site (staat op `/admin`). **Monetization**: *Bits enabled*.
 4. Vul op `/admin` de **Client ID**, **Extension Secret** en **Client Secret** van de extensie in. Ze worden opgeslagen in het data-volume, nooit in Docker of een `.env`, en nooit teruggestuurd naar de browser.
-5. Klik op **Koppelen & prijzen bijwerken**. De server meldt zich aan voor betalingen (`extension.bits_transaction.create`) en zet per actie een bits-product klaar. De prijzen komen van het dashboard (kolom 💎 Bits); bij elke keer opslaan worden ze bijgewerkt.
+5. Klik op **Koppelen & prijzen bijwerken**. De server meldt zich aan voor betalingen (`extension.bits_transaction.create`) en zet per actie een bits-product klaar. De prijzen komen van het dashboard (kolom Bits); bij elke keer opslaan worden ze bijgewerkt.
 6. Download de **extensie-zip** op `/admin` (het adres van je site zit er al in) en upload hem bij *Files*. Zet de extensie op *Hosted Test*, installeer hem op het kanaal en test.
 7. Werkt alles, dien hem dan in voor review bij Twitch. Zet na goedkeuring op `/admin` het vinkje **Testfase** uit en klik nogmaals op **Koppelen & prijzen bijwerken**.
 

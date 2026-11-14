@@ -61,7 +61,7 @@
 </head>
 <body>
 <header>
-  <h1>🚜 FS25 Twitch Sabotage</h1>
+  <h1>FS25 Twitch Sabotage</h1>
   <span id="who"></span>
 </header>
 <main>
@@ -164,7 +164,7 @@
         Vink per actie aan of hij met <b>bits</b>, met <b>channel points</b> of met allebei gekocht kan worden, en vul de prijs in.</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Aan</th><th>Actie</th><th>Woord in cheer</th><th>💎 Bits</th><th>🟣 Punten</th><th>Cooldown (s)</th><th>Waarde</th><th></th></tr></thead>
+          <thead><tr><th>Aan</th><th>Actie</th><th>Woord in cheer</th><th>Bits</th><th>Punten</th><th>Cooldown (s)</th><th>Waarde</th><th></th></tr></thead>
           <tbody id="actions"></tbody>
         </table>
       </div>
@@ -175,7 +175,7 @@
     </div>
 
     <div id="unsaved" class="unsaved hidden">
-      <span>⚠️ Je hebt wijzigingen bij de acties die nog <b>niet zijn opgeslagen</b>.</span>
+      <span>Je hebt wijzigingen bij de acties die nog <b>niet zijn opgeslagen</b>.</span>
       <span><button id="unsavedSave">Opslaan</button> <button class="secondary" id="unsavedUndo">Ongedaan maken</button></span>
     </div>
 
@@ -227,7 +227,7 @@ function renderActions() {
   for (const a of actions) {
     if (GROUPS[a.id]) tb.insertAdjacentHTML('beforeend', `<tr class="group"><td colspan="8">${GROUPS[a.id]}</td></tr>`);
     const c = me.config.actions[a.id];
-    const reward = me.rewards[a.id] ? ' ✅' : '';
+    const reward = me.rewards[a.id] ? ' <span class="desc">(beloning staat op Twitch)</span>' : '';
     tb.insertAdjacentHTML('beforeend', `<tr data-id="${a.id}">
       <td><input type="checkbox" data-f="enabled" ${c.enabled ? 'checked' : ''}></td>
       <td><b>${esc(a.label)}</b>${reward}<div class="desc">${esc(a.desc)}</div></td>
@@ -319,7 +319,7 @@ async function saveSettings() {
   $('#saveMsg').textContent = 'Bezig met opslaan…';
   try {
     const r = await api('/api/config', { method:'POST', body:JSON.stringify(cfg) });
-    $('#saveMsg').innerHTML = r.errors.length ? `<span class="fail">Opgeslagen, maar: ${r.errors.map(esc).join('<br>')}</span>` : '<span class="ok">Opgeslagen ✔</span>';
+    $('#saveMsg').innerHTML = r.errors.length ? `<span class="fail">Opgeslagen, maar: ${r.errors.map(esc).join('<br>')}</span>` : '<span class="ok">Opgeslagen.</span>';
     me = await api('/api/me');
     fillSettings();
   } catch (e) {
@@ -368,9 +368,9 @@ $('#ftpSave').onclick = async () => {
     me.link = (await postJson('/api/link', { mode:'ftp', host:$('#ftpHost').value, port:$('#ftpPort').value, user:$('#ftpUser').value, password:$('#ftpPass').value, path:$('#ftpPath').value })).link;
     renderLink();
     const t = await postJson('/api/link/test');
-    msg.innerHTML = `<span class="ok">✔ Verbonden${t.secure ? ' (versleuteld)' : ''}</span><br>Map: <code>${esc(t.profile)}</code><br>`
-      + (t.modInstalled ? '✔ Mod staat op de server' : '✖ Mod staat nog niet op de server (stap 2)') + '<br>'
-      + (t.modRan ? `✔ Mod heeft al gedraaid op de server${t.outboxVersion ? ` (laatst gemelde versie: v${esc(t.outboxVersion)})` : ''}` : 'ℹ Mod heeft nog niet gedraaid: herstart de server en laad de savegame')
+    msg.innerHTML = `<span class="ok">Verbonden${t.secure ? ' (versleuteld)' : ''}</span><br>Map: <code>${esc(t.profile)}</code><br>`
+      + (t.modInstalled ? 'Mod staat op de server.' : '<span class="fail">Mod staat nog niet op de server (stap 2).</span>') + '<br>'
+      + (t.modRan ? `Mod heeft al gedraaid op de server${t.outboxVersion ? ` (laatst gemelde versie: v${esc(t.outboxVersion)})` : ''}` : 'Mod heeft nog niet gedraaid: herstart de server en laad de savegame')
       + `<br><br><b>Twitch Sabotage-mods op de FTP:</b><br>`
       + (t.copies.length ? t.copies.map(c => `<code>${esc(c.path)}</code> ${Math.round((c.size || 0) / 1024)} kB ${esc((c.date || '').slice(0, 16).replace('T', ' '))}`).join('<br>') : 'geen gevonden')
       + (t.copies.length > 1 ? '<br><span class="fail">Er staan meerdere kopieën: verwijder de oude, anders kan de server die laden.</span>' : '')
@@ -380,12 +380,12 @@ $('#ftpSave').onclick = async () => {
 $('#installMod').onclick = async () => {
   const msg = $('#installMsg');
   msg.textContent = 'Uploaden…';
-  try { const r = await postJson('/api/link/install-mod'); msg.innerHTML = `<span class="ok">✔ Geüpload naar <code>${esc(r.path)}</code>. Herstart nu de server.</span>`; }
+  try { const r = await postJson('/api/link/install-mod'); msg.innerHTML = `<span class="ok">Geüpload naar <code>${esc(r.path)}</code>. Herstart nu de server.</span>`; }
   catch (e) { msg.innerHTML = `<span class="fail">${esc(e.message)}</span>`; }
 };
 $('#savePlayer').onclick = async () => {
   await postJson('/api/config', { playerName: $('#playerName').value });
-  $('#playerMsg').innerHTML = '<span class="ok">Opgeslagen ✔</span>';
+  $('#playerMsg').innerHTML = '<span class="ok">Opgeslagen.</span>';
 };
 
 // ---------- Update-meldingen ----------
@@ -394,17 +394,17 @@ function renderUpdates(s) {
   const L = s.latest || {};
   if (s.modOutdated) {
     if (s.linkKind === 'ftp') {
-      out.push(`<div class="notice"><b>⚠️ De mod op je server is verouderd</b> (v${esc(s.modVersion)}, nieuwste: v${esc(L.mod)}).<br>
+      out.push(`<div class="notice"><b>De mod op je server is verouderd</b> (v${esc(s.modVersion)}, nieuwste: v${esc(L.mod)}).<br>
         Klik op <button class="small" data-update="installMod">Mod op server zetten</button> en herstart daarna de server via het webpanel.</div>`);
     } else {
-      out.push(`<div class="notice"><b>⚠️ De mod is verouderd</b> (v${esc(s.modVersion)}, nieuwste: v${esc(L.mod)}).<br>
+      out.push(`<div class="notice"><b>De mod is verouderd</b> (v${esc(s.modVersion)}, nieuwste: v${esc(L.mod)}).<br>
         Sluit Farming Simulator 25 helemaal af en klik op <button class="small" data-update="appInstallMod">Mod bijwerken</button>. Het Windows-programma zet de nieuwe mod dan op de goede plek.<br>
         <span class="muted">Lukt dat niet? <a href="/downloads/FS25_TwitchSabotage.zip">Download de mod</a> en zet hem in <code>Documenten\\My Games\\FarmingSimulator2025\\mods</code> met precies de naam <code>FS25_TwitchSabotage.zip</code>, dus zonder "(1)". Verwijder andere Twitch Sabotage-bestanden uit die map.
         De melding verdwijnt zodra de nieuwe mod draait.</span></div>`);
     }
   }
   if (s.appOutdated) {
-    out.push(`<div class="notice"><b>⚠️ Het Windows-programma is verouderd</b> (v${esc(s.companionVersion)}, nieuwste: v${esc(L.app)}).<br>
+    out.push(`<div class="notice"><b>Het Windows-programma is verouderd</b> (v${esc(s.companionVersion)}, nieuwste: v${esc(L.app)}).<br>
       <a class="btn small" href="/downloads/FS25TwitchSabotage.exe">Nieuwe versie downloaden</a>, sluit het oude programma (rechtsklik op het icoon bij de klok → Afsluiten) en start de nieuwe.</div>`);
   }
   const html = out.join('');
@@ -414,13 +414,13 @@ function renderUpdates(s) {
   const appBtn = document.querySelector('[data-update=appInstallMod]');
   if (appBtn) appBtn.onclick = async () => {
     appBtn.disabled = true; appBtn.textContent = 'Bezig…';
-    try { const r = await postJson('/api/app/install-mod'); appBtn.textContent = '✔ Bijgewerkt'; alert(r.message); }
+    try { const r = await postJson('/api/app/install-mod'); appBtn.textContent = 'Bijgewerkt'; alert(r.message); }
     catch (e) { appBtn.disabled = false; appBtn.textContent = 'Mod bijwerken'; alert(e.message); }
   };
   const btn = document.querySelector('[data-update=installMod]');
   if (btn) btn.onclick = async () => {
     btn.disabled = true; btn.textContent = 'Uploaden…';
-    try { await postJson('/api/link/install-mod'); btn.textContent = '✔ Geüpload: herstart nu de server'; }
+    try { await postJson('/api/link/install-mod'); btn.textContent = 'Geüpload: herstart nu de server'; }
     catch (e) { btn.disabled = false; btn.textContent = 'Mod op server zetten'; alert(e.message); }
   };
 }
@@ -436,12 +436,12 @@ function setStatus(s) {
 function addLog(e) {
   if (e.kind === 'done' || e.kind === 'failed') finishTest(e.id, e.kind === 'done');
   const time = new Date(e.time).toLocaleTimeString('nl-NL');
-  const src = e.source === 'bits' ? `💎 ${e.amount} bits` : e.source === 'points' ? `🟣 ${e.amount} punten` : e.source === 'test' ? '🧪 test' : '';
+  const src = e.source === 'bits' ? `${e.amount} bits` : e.source === 'points' ? `${e.amount} punten` : e.source === 'test' ? 'test' : '';
   let html;
   if (e.kind === 'system') html = `<span class="sys">${esc(e.msg)}</span>`;
-  else if (e.kind === 'queued') html = `⏳ <b>${esc(e.viewer)}</b> ${src}: ${esc(e.label)}`;
-  else if (e.kind === 'done') html = `<span class="ok">✔</span> <b>${esc(e.viewer)}</b>: ${esc(e.label)} ${e.msg ? `<span class="muted">(${esc(e.msg)})</span>` : ''}`;
-  else if (e.kind === 'failed') html = `<span class="fail">✖</span> <b>${esc(e.viewer)}</b>: ${esc(e.label)} <span class="muted">(${esc(e.msg)}${e.source === 'points' ? ', punten terug' : ''})</span>`;
+  else if (e.kind === 'queued') html = `<span class="sys">In wachtrij:</span> <b>${esc(e.viewer)}</b> (${src}): ${esc(e.label)}`;
+  else if (e.kind === 'done') html = `<span class="ok">Gelukt:</span> <b>${esc(e.viewer)}</b>: ${esc(e.label)} ${e.msg ? `<span class="muted">(${esc(e.msg)})</span>` : ''}`;
+  else if (e.kind === 'failed') html = `<span class="fail">Mislukt:</span> <b>${esc(e.viewer)}</b>: ${esc(e.label)} <span class="muted">(${esc(e.msg)}${e.source === 'points' ? ', punten terug' : ''})</span>`;
   else html = `<span class="sys">${esc(e.viewer)} ${src}: ${esc(e.msg)}</span>`;
   $('#log').insertAdjacentHTML('afterbegin', `<li><span class="t">${time}</span>${html}</li>`);
 }

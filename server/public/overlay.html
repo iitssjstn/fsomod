@@ -25,7 +25,7 @@ function toast(e) {
   const src = e.source === 'bits' ? `${e.amount} bits` : e.source === 'points' ? `${e.amount} punten` : 'test';
   const el = document.createElement('div');
   el.className = `toast ${e.source === 'bits' ? 'bits' : ''} ${e.kind === 'failed' ? 'failed' : ''}`;
-  el.innerHTML = `🚜 <b>${esc(e.viewer)}</b> → ${esc(e.label)}<small>${src}${e.kind === 'failed' ? ' · mislukt' : ''}</small>`;
+  el.innerHTML = `<b>${esc(e.viewer)}</b> → ${esc(e.label)}<small>${src}${e.kind === 'failed' ? ' · mislukt' : ''}</small>`;
   stack.appendChild(el);
   setTimeout(() => el.remove(), 7200);
   while (stack.children.length > 4) stack.firstChild.remove();

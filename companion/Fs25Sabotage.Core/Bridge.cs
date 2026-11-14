@@ -392,7 +392,7 @@ public sealed class Bridge : IDisposable
             var status = (string?)r.Attribute("status") ?? "failed";
             var msg = (string?)r.Attribute("msg") ?? "";
             _ = Send(new { type = "result", id = long.TryParse(id, out var n) ? n : 0, status, msg });
-            Say($"{(status == "ok" ? "✔" : "✖")} #{id} {(string?)r.Attribute("action")}{(msg.Length > 0 ? $" ({msg})" : "")}");
+            Say($"{(status == "ok" ? "OK" : "MISLUKT")} #{id} {(string?)r.Attribute("action")}{(msg.Length > 0 ? $" ({msg})" : "")}");
         }
     }
 

@@ -32,7 +32,7 @@
 
   function render() {
     app.textContent = '';
-    var h = el('h1', null, '🚜 Saboteer de boer!');
+    var h = el('h1', null, 'Saboteer de boer');
     app.appendChild(h);
 
     if (!ext) { app.appendChild(el('p', 'muted', 'Deze extensie werkt alleen op Twitch.')); return; }
@@ -44,8 +44,8 @@
     var state;
     if (!bitsEnabled) state = el('div', 'state off', 'Bits zijn op dit kanaal (of in deze app) niet beschikbaar.');
     else if (productsError) state = el('div', 'state off', 'Bits kunnen hier niet gebruikt worden. Probeer het op twitch.tv in je browser.');
-    else if (!menu.gameActive) state = el('div', 'state off', '⏸ De game draait nu niet. Probeer het straks opnieuw.');
-    else state = el('div', 'state', '🟢 De game draait: saboteer maar!');
+    else if (!menu.gameActive) state = el('div', 'state off', 'De game draait nu niet. Probeer het straks opnieuw.');
+    else state = el('div', 'state', 'De game draait. Kies een actie.');
     app.appendChild(state);
 
     var list = el('div', 'list');
@@ -61,7 +61,7 @@
       txt.appendChild(el('span', 'name', a.label));
       txt.appendChild(el('span', 'desc', a.desc));
       btn.appendChild(txt);
-      btn.appendChild(el('span', 'cost', '💎 ' + cost));
+      btn.appendChild(el('span', 'cost', cost + ' bits'));
       btn.disabled = busy || !bitsEnabled || productsError || !menu.gameActive || !p;
       btn.addEventListener('mouseenter', function () { try { ext.bits.showBitsBalance(); } catch (e) {} });
       btn.addEventListener('click', function () {
@@ -115,7 +115,7 @@
   ext.bits.onTransactionComplete(function (tx) {
     var name = tx.product && tx.product.displayName ? tx.product.displayName : 'Sabotage';
     if (tx.initiator !== 'current_user') {
-      if (mode === 'overlay') toast('💥 ' + (tx.displayName || 'Iemand') + ': ' + name + '!');
+      if (mode === 'overlay') toast((tx.displayName || 'Iemand') + ': ' + name);
       return;
     }
     busy = false;
@@ -125,7 +125,7 @@
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ receipt: tx.transactionReceipt, displayName: tx.displayName })
     }).catch(function () { /* Twitch meldt de betaling ook rechtstreeks aan de server */ });
-    toast('Bedankt! ' + name + ' komt eraan 🚜');
+    toast('Bedankt. ' + name + ' wordt uitgevoerd.');
   });
 
   ext.bits.onTransactionCancelled(function () { busy = false; render(); });

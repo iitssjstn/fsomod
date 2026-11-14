@@ -28,7 +28,7 @@
 </style>
 </head>
 <body>
-<header><h1>⚙️ Beheer</h1><a href="/" style="color:var(--muted)">Naar de site</a> <button class="secondary hidden" id="logout" style="margin:0">Uitloggen</button></header>
+<header><h1>Beheer</h1><a href="/" style="color:var(--muted)">Naar de site</a> <button class="secondary hidden" id="logout" style="margin:0">Uitloggen</button></header>
 <main>
   <!-- Eerste installatie -->
   <section id="setup" class="hidden">
@@ -158,7 +158,7 @@ async function load() {
   $('#clientSecret').placeholder = s.clientSecretSet ? '•••••••• (ingesteld, leeg laten om te houden)' : '';
   $('#secretHint').textContent = s.clientSecretSet ? 'Het secret wordt nooit getoond. Vul alleen in om het te vervangen.' : 'Nog niet ingesteld.';
   $('#streamers').innerHTML = s.streamers.length
-    ? s.streamers.map(u => `<tr><td>${esc(u.displayName)}</td><td>${u.connected ? '🟢' : '⚪'}</td><td>${u.gameActive ? '🟢' : '⚪'}</td></tr>`).join('')
+    ? s.streamers.map(u => `<tr><td>${esc(u.displayName)}</td><td>${u.connected ? 'verbonden' : '-'}</td><td>${u.gameActive ? 'actief' : '-'}</td></tr>`).join('')
     : '<tr><td colspan="3" class="hint">Nog geen streamers.</td></tr>';
 }
 
@@ -175,13 +175,13 @@ $('#logout').onclick = async () => { await api('/api/admin/logout', {}); load();
 $('#save').onclick = async () => {
   try {
     await api('/api/admin/settings', { clientId:$('#clientId').value, clientSecret:$('#clientSecret').value, baseUrl:$('#baseUrl').value });
-    msg($('#saveMsg'), 'Opgeslagen ✔', true); load();
+    msg($('#saveMsg'), 'Opgeslagen.', true); load();
   } catch (e) { msg($('#saveMsg'), e.message); }
 };
 $('#extSave').onclick = async () => {
   try {
     await api('/api/admin/settings', { extClientId:$('#extClientId').value, extSecret:$('#extSecret').value, extApiSecret:$('#extApiSecret').value, extInDevelopment:$('#extInDevelopment').checked });
-    msg($('#extMsg'), 'Opgeslagen ✔', true); load();
+    msg($('#extMsg'), 'Opgeslagen.', true); load();
   } catch (e) { msg($('#extMsg'), e.message); }
 };
 $('#extConnect').onclick = async () => {
@@ -189,13 +189,13 @@ $('#extConnect').onclick = async () => {
   try {
     const r = await api('/api/admin/extension/connect', {});
     const errs = r.products.flatMap(p => p.errors.map(e => `${p.login}: ${e}`));
-    const lines = [r.subscription.ok ? 'Betalingen: gekoppeld ✔' : `Betalingen: ${r.subscription.error}`];
-    lines.push(errs.length ? 'Prijzen: ' + errs.join(' | ') : `Prijzen bijgewerkt voor ${r.products.length} kanaal/kanalen ✔`);
+    const lines = [r.subscription.ok ? 'Betalingen: gekoppeld.' : `Betalingen: ${r.subscription.error}`];
+    lines.push(errs.length ? 'Prijzen: ' + errs.join(' | ') : `Prijzen bijgewerkt voor ${r.products.length} kanaal/kanalen.`);
     msg($('#extMsg'), lines.join(' · '), r.subscription.ok && !errs.length);
   } catch (e) { msg($('#extMsg'), e.message); }
 };
 $('#changePw').onclick = async () => {
-  try { await api('/api/admin/settings', { newPassword:$('#newPw').value }); $('#newPw').value = ''; msg($('#pwMsg'), 'Wachtwoord gewijzigd ✔', true); }
+  try { await api('/api/admin/settings', { newPassword:$('#newPw').value }); $('#newPw').value = ''; msg($('#pwMsg'), 'Wachtwoord gewijzigd.', true); }
   catch (e) { msg($('#pwMsg'), e.message); }
 };
 $('#resub').onclick = async () => {
@@ -203,7 +203,7 @@ $('#resub').onclick = async () => {
   try {
     const r = await api('/api/admin/resubscribe-all', {});
     const bad = r.results.filter(x => !x.ok);
-    msg($('#resubMsg'), bad.length ? 'Fouten: ' + bad.map(x => `${x.login}: ${x.errors.join(', ')}`).join(' | ') : `Klaar (${r.results.length} streamers) ✔`, !bad.length);
+    msg($('#resubMsg'), bad.length ? 'Fouten: ' + bad.map(x => `${x.login}: ${x.errors.join(', ')}`).join(' | ') : `Klaar (${r.results.length} streamers).`, !bad.length);
   } catch (e) { msg($('#resubMsg'), e.message); }
 };
 load();
