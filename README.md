@@ -13,7 +13,7 @@ Een FS25-mod kan zelf geen internetverbinding maken. Daarom draait er bij de str
 
 | Map | Wat |
 |---|---|
-| `server/` | Node.js-server: inloggen met Twitch, dashboard, EventSub-webhooks, channel-points-beloningen, OBS-overlay |
+| `server/` | Node.js-server: inloggen met Twitch, dashboard, EventSub-webhooks, channel-points-beloningen, OBS-overlay, Twitch-extensie (`server/extension/`) |
 | `companion/` | Windows-programma voor de streamer (C#/.NET 8, WinForms): `Fs25Sabotage.App` (venster + systeemvak), `Fs25Sabotage.Core` (logica), `Fs25Sabotage.Cli` (zonder venster, voor tests) |
 | `mod/FS25_TwitchSabotage/` | De FS25-mod (Lua) |
 | `mod/tests/` | Test van de mod in een nagebootste FS25-omgeving |
@@ -145,6 +145,21 @@ git tag v1.0.1
 ```bash
 git push origin v1.0.1
 ```
+
+## Twitch-extensie: bits met één klik
+
+Met de extensie hoeven kijkers niets te typen. Onder de stream (paneel) en in beeld (overlay, knop "🚜 Sabotage") staan knoppen zoals *Motor uit 💎 100*. De kijker klikt, Twitch toont het bevestigingsvenster voor de bits, en de sabotage gebeurt. Draait de game niet, dan zijn de knoppen grijs. Cheers met `!woord` blijven ook werken.
+
+Instellen (eenmalig, via `/admin` op de website):
+1. Maak op [dev.twitch.tv/console/extensions](https://dev.twitch.tv/console/extensions) een extensie aan met de types **Panel** en **Video - Fullscreen**.
+2. **Asset Hosting**: Panel Viewer Path `panel.html` (hoogte 500), Video Fullscreen Viewer Path `video_overlay.html`, Config Path `config.html`.
+3. **Capabilities**: zet bij *Allowlist for URL Fetching Domains* het adres van je site (staat op `/admin`). **Monetization**: *Bits enabled*.
+4. Vul op `/admin` de **Client ID**, **Extension Secret** en **Client Secret** van de extensie in. Ze worden opgeslagen in het data-volume, nooit in Docker of een `.env`, en nooit teruggestuurd naar de browser.
+5. Klik op **Koppelen & prijzen bijwerken**. De server meldt zich aan voor betalingen (`extension.bits_transaction.create`) en zet per actie een bits-product klaar. De prijzen komen van het dashboard (kolom 💎 Bits); bij elke keer opslaan worden ze bijgewerkt.
+6. Download de **extensie-zip** op `/admin` (het adres van je site zit er al in) en upload hem bij *Files*. Zet de extensie op *Hosted Test*, installeer hem op het kanaal en test.
+7. Werkt alles, dien hem dan in voor review bij Twitch. Zet na goedkeuring op `/admin` het vinkje **Testfase** uit en klik nogmaals op **Koppelen & prijzen bijwerken**.
+
+Elke betaling komt twee keer binnen (vanuit het paneel en als melding van Twitch) met hetzelfde transactienummer. Hij wordt maar één keer uitgevoerd. Bits kunnen niet worden terugbetaald; daarom zijn de knoppen grijs als de game niet actief is. De bits-producten gelden voor de hele extensie, dus de prijzen volgen het kanaal waarvoor het laatst is opgeslagen. Dat past bij één streamer.
 
 ## Voor de streamer: op een gehuurde server (bijv. G-Portal)
 

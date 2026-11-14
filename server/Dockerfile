@@ -12,6 +12,7 @@ RUN npm ci --omit=dev && npm cache clean --force \
 
 COPY src ./src
 COPY public ./public
+COPY extension ./extension
 # De workflow zet hier de mod-zip en de .exe neer voordat de image gebouwd wordt.
 COPY downloads ./downloads
 

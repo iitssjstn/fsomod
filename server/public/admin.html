@@ -80,6 +80,30 @@
     </div>
 
     <div class="card">
+      <h2>Twitch-extensie (bits met één klik)</h2>
+      <ol>
+        <li>Maak op <a href="https://dev.twitch.tv/console/extensions" target="_blank" rel="noopener">dev.twitch.tv/console/extensions</a> een extensie aan. Kies bij <b>Extension Types</b>: <i>Panel</i> en <i>Video - Fullscreen</i>.</li>
+        <li>Bij <b>Asset Hosting</b>: Panel Viewer Path <code>panel.html</code> (hoogte 500), Video Fullscreen Viewer Path <code>video_overlay.html</code>, Config Path <code>config.html</code>.</li>
+        <li>Bij <b>Capabilities</b>: zet <i>Allowlist for URL Fetching Domains</i> op <code id="ebsUrl"></code>. Bij <b>Monetization</b>: <i>Bits enabled</i>.</li>
+        <li>Vul hieronder de sleutels van de extensie in (bij <b>Extension Settings</b> → <i>Client ID</i>, <i>Extension Secret</i> en <i>Client Secret</i>) en klik op Opslaan.</li>
+        <li>Klik op <b>Koppelen &amp; prijzen bijwerken</b>: de server meldt zich aan voor betalingen en zet de bits-producten klaar.</li>
+        <li>Download de <b>zip</b> hieronder en upload hem bij <b>Files</b> → <i>Upload Version</i>. Zet de extensie in <i>Hosted Test</i> en installeer hem op het kanaal.</li>
+      </ol>
+      <label for="extClientId">Client ID van de extensie</label>
+      <input id="extClientId" autocomplete="off">
+      <label for="extSecret">Extension Secret (de base64-code voor JWT)</label>
+      <input id="extSecret" type="password" autocomplete="off">
+      <label for="extApiSecret">Client Secret van de extensie (voor de Twitch-API)</label>
+      <input id="extApiSecret" type="password" autocomplete="off">
+      <div class="hint">Geheimen worden nooit getoond. Laat leeg om ze te houden.</div>
+      <label style="font-weight:normal"><input type="checkbox" id="extInDevelopment" style="width:auto"> Testfase: bits-producten zijn "in ontwikkeling" (zet uit zodra Twitch de extensie heeft goedgekeurd en hij live staat)</label>
+      <button id="extSave">Opslaan</button>
+      <button class="secondary" id="extConnect">Koppelen &amp; prijzen bijwerken</button>
+      <a class="secondary" id="extZip" href="/api/admin/extension.zip" style="display:inline-block; margin-top:14px; padding:9px 16px; border-radius:6px; background:#2c3a31; color:#fff; text-decoration:none">Extensie-zip downloaden</a>
+      <div class="msg" id="extMsg"></div>
+    </div>
+
+    <div class="card">
       <h2>Twitch-koppelingen vernieuwen</h2>
       <p class="hint">Nodig nadat je het domein of de Twitch-app hebt gewijzigd. Maakt de EventSub-koppelingen (bits, channel points) van alle streamers opnieuw aan.</p>
       <button class="secondary" id="resub">Alles opnieuw koppelen</button>
@@ -124,6 +148,13 @@ async function load() {
   $('#clientId').value = s.clientId;
   $('#baseUrl').value = s.baseUrl;
   $('#clientSecret').value = '';
+  $('#ebsUrl').textContent = 'https://' + s.ebsDomain;
+  $('#extClientId').value = s.extClientId;
+  for (const [id, set] of [['extSecret', s.extSecretSet], ['extApiSecret', s.extApiSecretSet]]) {
+    $('#' + id).value = '';
+    $('#' + id).placeholder = set ? '•••••••• (ingesteld, leeg laten om te houden)' : '';
+  }
+  $('#extInDevelopment').checked = s.extInDevelopment;
   $('#clientSecret').placeholder = s.clientSecretSet ? '•••••••• (ingesteld, leeg laten om te houden)' : '';
   $('#secretHint').textContent = s.clientSecretSet ? 'Het secret wordt nooit getoond. Vul alleen in om het te vervangen.' : 'Nog niet ingesteld.';
   $('#streamers').innerHTML = s.streamers.length
@@ -146,6 +177,22 @@ $('#save').onclick = async () => {
     await api('/api/admin/settings', { clientId:$('#clientId').value, clientSecret:$('#clientSecret').value, baseUrl:$('#baseUrl').value });
     msg($('#saveMsg'), 'Opgeslagen ✔', true); load();
   } catch (e) { msg($('#saveMsg'), e.message); }
+};
+$('#extSave').onclick = async () => {
+  try {
+    await api('/api/admin/settings', { extClientId:$('#extClientId').value, extSecret:$('#extSecret').value, extApiSecret:$('#extApiSecret').value, extInDevelopment:$('#extInDevelopment').checked });
+    msg($('#extMsg'), 'Opgeslagen ✔', true); load();
+  } catch (e) { msg($('#extMsg'), e.message); }
+};
+$('#extConnect').onclick = async () => {
+  msg($('#extMsg'), 'Bezig…', true);
+  try {
+    const r = await api('/api/admin/extension/connect', {});
+    const errs = r.products.flatMap(p => p.errors.map(e => `${p.login}: ${e}`));
+    const lines = [r.subscription.ok ? 'Betalingen: gekoppeld ✔' : `Betalingen: ${r.subscription.error}`];
+    lines.push(errs.length ? 'Prijzen: ' + errs.join(' | ') : `Prijzen bijgewerkt voor ${r.products.length} kanaal/kanalen ✔`);
+    msg($('#extMsg'), lines.join(' · '), r.subscription.ok && !errs.length);
+  } catch (e) { msg($('#extMsg'), e.message); }
 };
 $('#changePw').onclick = async () => {
   try { await api('/api/admin/settings', { newPassword:$('#newPw').value }); $('#newPw').value = ''; msg($('#pwMsg'), 'Wachtwoord gewijzigd ✔', true); }

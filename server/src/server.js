@@ -9,6 +9,7 @@ const twitch = require('./twitch');
 const engine = require('./engine');
 const { ACTIONS, mergeConfig } = require('./actions');
 const { FtpLink, testConnection, installMod } = require('./ftplink');
+const extension = require('./extension');
 
 // Alleen interne paden/poort (staan vast in de Docker-image). Alle echte instellingen gaan via /admin.
 const PORT = Number(process.env.PORT || 3000);
@@ -123,6 +124,10 @@ app.post('/eventsub', express.raw({ type: '*/*', limit: '1mb' }), (req, res) => 
   if (db.seenEvent(id)) return;
 
   const subType = msg.subscription?.type;
+  if (subType === 'extension.bits_transaction.create') {
+    if (type === 'notification' && msg.subscription?.condition?.extension_client_id === db.getSettings().extClientId) extension.onEventSubTransaction(msg.event);
+    return;
+  }
   const user = db.getUser(msg.subscription?.condition?.broadcaster_user_id);
   if (!user) return;
 
@@ -137,6 +142,7 @@ app.post('/eventsub', express.raw({ type: '*/*', limit: '1mb' }), (req, res) => 
 });
 
 app.use(express.json({ limit: '200kb' }));
+extension.mount(app, express);
 
 // Openbare status: alleen of de site klaar is, nooit instellingen.
 app.get('/api/status', (req, res) => res.json({ configured: db.isConfigured() }));
@@ -151,6 +157,11 @@ app.get('/api/admin/state', (req, res) => {
       clientId: s.clientId || '',
       clientSecretSet: !!s.clientSecret,          // het secret zelf gaat nooit naar de browser
       baseUrl: s.baseUrl || '',
+      extClientId: s.extClientId || '',
+      extSecretSet: !!s.extSecret,
+      extApiSecretSet: !!s.extApiSecret,
+      extInDevelopment: s.extInDevelopment !== false,
+      ebsDomain: new URL(base).host,
       streamers: db.allUsers().map(u => ({ login: u.login, displayName: u.displayName, connected: !!engine.ch(u.id).ws, gameActive: engine.ch(u.id).gameActive })),
     });
   }
@@ -196,14 +207,38 @@ app.post('/api/admin/settings', requireAdmin, (req, res) => {
     if (u && !/^https?:\/\/[^\s/]+$/.test(u)) return res.status(400).json({ error: 'Basisadres moet zoiets zijn als https://sabotage.mijndomein.nl' });
     fields.baseUrl = u;
   }
+  if (typeof b.extClientId === 'string') fields.extClientId = b.extClientId.trim();
+  if (typeof b.extSecret === 'string' && b.extSecret.trim()) {
+    const v = b.extSecret.trim();
+    if (!/^[A-Za-z0-9+/]+=*$/.test(v)) return res.status(400).json({ error: 'De Extension Secret moet de base64-code uit de Twitch-console zijn.' });
+    fields.extSecret = v;
+  }
+  if (typeof b.extApiSecret === 'string' && b.extApiSecret.trim()) fields.extApiSecret = b.extApiSecret.trim();
+  if (typeof b.extInDevelopment === 'boolean') fields.extInDevelopment = b.extInDevelopment;
   if (typeof b.newPassword === 'string' && b.newPassword) {
     if (b.newPassword.length < 10) return res.status(400).json({ error: 'Wachtwoord moet minstens 10 tekens zijn' });
     fields.adminHash = hashPassword(b.newPassword);
   }
   db.updateSettings(fields);
   twitch.resetAppToken();
+  extension.resetExtToken();
   if (fields.adminHash) cookie(res, 'adm', adminToken(Date.now() + 12 * 3600_000), 12 * 3600, req);
   res.json({ ok: true });
+});
+
+// ---------- Twitch-extensie ----------
+app.get('/api/admin/extension.zip', requireAdmin, (req, res) => {
+  res.set('Content-Type', 'application/zip');
+  res.set('Content-Disposition', 'attachment; filename="fs25-sabotage-extensie.zip"');
+  res.send(extension.buildZip(baseUrl(req)));
+});
+
+app.post('/api/admin/extension/connect', requireAdmin, async (req, res) => {
+  if (!extension.extConfigured() || !db.getSettings().extApiSecret) return res.status(400).json({ error: 'Vul eerst Client ID, Extension Secret en API Client Secret van de extensie in.' });
+  const sub = await extension.subscribeTransactions(baseUrl(req));
+  const products = [];
+  for (const u of db.allUsers()) products.push({ login: u.login, errors: await extension.syncProducts(u) });
+  res.json({ subscription: sub, products });
 });
 
 // Na wijzigen van domein of Twitch-app: alle EventSub-koppelingen opnieuw aanmaken.
@@ -368,6 +403,9 @@ app.post('/api/config', requireUser, async (req, res) => {
   let errors = [];
   if (user.broadcasterType) errors = await engine.syncRewards(user);
   else errors = ['Channel points zijn alleen beschikbaar voor Twitch Affiliates/Partners. Bits werken wel.'];
+  if (extension.extConfigured() && db.getSettings().extApiSecret) {
+    errors.push(...(await extension.syncProducts(user)).map(e => `Extensie: ${e}`));
+  }
   res.json({ ok: true, errors, rewards: db.getUser(user.id).rewards || {} });
 });
 

@@ -1,0 +1,28 @@
+* { box-sizing: border-box }
+html, body { margin: 0; font: 13px/1.4 Inter, Roobert, "Helvetica Neue", Arial, sans-serif; color: #efeff1 }
+body[data-mode="panel"], body[data-mode="config"] { background: #18181b }
+body[data-mode="overlay"] { background: transparent }
+.hidden { display: none !important }
+.menu { padding: 12px }
+.menu h1 { font-size: 15px; margin: 0 0 4px }
+.muted { color: #adadb8; font-size: 12px; margin: 0 0 10px }
+.state { font-size: 12px; padding: 6px 8px; border-radius: 6px; margin-bottom: 10px; background: #26262c }
+.state.off { background: #3a2a12; color: #f5c46b }
+.list { display: flex; flex-direction: column; gap: 6px }
+.item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px;
+        border: 1px solid #3a3a3d; background: #1f1f23; color: inherit; font: inherit; cursor: pointer }
+.item:hover:not(:disabled) { border-color: #9147ff; background: #26213a }
+.item:disabled { opacity: .45; cursor: not-allowed }
+.item .txt { flex: 1; min-width: 0 }
+.item .name { font-weight: 600; display: block }
+.item .desc { color: #adadb8; font-size: 11px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.item .cost { white-space: nowrap; font-weight: 700; color: #bf94ff }
+.toggle { position: fixed; top: 80px; right: 12px; z-index: 5; padding: 8px 12px; border-radius: 8px; border: 0; cursor: pointer;
+          background: rgba(24,24,27,.85); color: #fff; font-weight: 600; font-size: 13px; box-shadow: 0 2px 10px rgba(0,0,0,.4) }
+.toggle:hover { background: #9147ff }
+.floating { position: fixed; top: 122px; right: 12px; width: 300px; max-height: calc(100% - 140px); overflow: auto; z-index: 5;
+            background: rgba(24,24,27,.95); border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,.5) }
+.toast { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 6; padding: 10px 12px; border-radius: 8px;
+         background: #1f6f3a; color: #fff; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.4) }
+.toast.err { background: #8a2b2b }
+body[data-mode="overlay"] .toast { left: auto; width: 300px; right: 12px; bottom: 60px }
