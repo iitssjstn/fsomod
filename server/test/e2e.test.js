@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { stop, rmOpts } = require('./helpers');
 
 const PORT = 3999;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -236,8 +237,8 @@ test('ongeldige koppelcode wordt geweigerd', async () => {
   assert.equal(code, 4003);
 });
 
-after(() => {
+after(async () => {
   clearInterval(modTimer);
-  for (const p of procs) p.kill();
-  fs.rmSync(tmp, { recursive: true, force: true });
+  await Promise.all(procs.map(stop));
+  fs.rmSync(tmp, rmOpts);
 });

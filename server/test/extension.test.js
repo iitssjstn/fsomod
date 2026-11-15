@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { stop, rmOpts } = require('./helpers');
 const WebSocket = require('ws');
 const { signJwt, buildZip } = require('../src/extension');
 
@@ -128,4 +129,4 @@ print(json.dumps({ "names": sorted(z.namelist()), "app": z.read("app.js").decode
   assert.ok(!app.includes('__EBS_URL__'));
 });
 
-after(() => { ws?.close(); server?.kill(); fs.rmSync(tmp, { recursive: true, force: true }); });
+after(async () => { ws?.close(); await stop(server); fs.rmSync(tmp, rmOpts); });

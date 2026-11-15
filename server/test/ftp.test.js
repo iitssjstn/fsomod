@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { stop, rmOpts } = require('./helpers');
 const FtpSrv = require('ftp-srv');
 
 const PORT = 3995;
@@ -142,7 +143,7 @@ test('game niet actief als de mod stopt (server uit of gepauzeerd)', async () =>
 
 after(async () => {
   clearInterval(modTimer);
-  server?.kill();
+  await stop(server);
   await ftpServer?.close();
-  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.rmSync(tmp, rmOpts);
 });
