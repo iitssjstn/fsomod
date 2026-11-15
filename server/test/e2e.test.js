@@ -237,6 +237,23 @@ test('ongeldige koppelcode wordt geweigerd', async () => {
   assert.equal(code, 4003);
 });
 
+test('privacy- en voorwaardenpagina met het contactadres uit /admin', async () => {
+  const bad = await fetch(`${BASE}/api/admin/settings`, { method: 'POST', headers: { cookie: adminCookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ contactEmail: 'geen-adres' }) });
+  assert.equal(bad.status, 400);
+  await fetch(`${BASE}/api/admin/settings`, { method: 'POST', headers: { cookie: adminCookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ contactEmail: 'support@voorbeeld.nl' }) });
+  for (const p of ['/privacy', '/terms']) {
+    const r = await fetch(`${BASE}${p}`);
+    assert.equal(r.status, 200);
+    assert.ok((await r.text()).includes('support@voorbeeld.nl'), p);
+  }
+});
+
+test('account verwijderen wist de streamer', async () => {
+  const r = await fetch(`${BASE}/api/account/delete`, { method: 'POST', headers: { cookie: sessionCookie() } });
+  assert.equal(r.status, 200);
+  assert.equal((await fetch(`${BASE}/api/me`, { headers: { cookie: sessionCookie() } })).status, 401);
+});
+
 after(async () => {
   clearInterval(modTimer);
   await Promise.all(procs.map(stop));

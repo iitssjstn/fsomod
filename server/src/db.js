@@ -67,4 +67,9 @@ function seenEvent(messageId) {
   return false;
 }
 
-module.exports = { load, save, flush, getUser, allUsers, findUserBy, upsertUser, seenEvent, getSettings, updateSettings, isConfigured };
+function deleteUser(id) {
+  delete state.users[id];
+  save();
+}
+
+module.exports = { load, save, flush, getUser, allUsers, findUserBy, upsertUser, deleteUser, seenEvent, getSettings, updateSettings, isConfigured };

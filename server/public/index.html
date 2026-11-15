@@ -184,7 +184,14 @@
       <h2>Logboek</h2>
       <ul id="log"></ul>
     </div>
+
+    <div class="card">
+      <h2>Account</h2>
+      <p class="muted">Verwijdert al je gegevens van deze site, de channel-points-beloningen die deze site heeft aangemaakt en de koppeling met Twitch. Dit kan niet ongedaan gemaakt worden.</p>
+      <button class="secondary" id="deleteAccount">Account verwijderen</button>
+    </div>
   </section>
+  <p class="muted" style="text-align:center;font-size:13px"><a href="/privacy" style="color:inherit">Privacy</a> · <a href="/terms" style="color:inherit">Voorwaarden</a></p>
 </main>
 
 <script>
@@ -337,6 +344,11 @@ $('#unsavedUndo').onclick = () => fillSettings();
 $('#showKey').onclick = () => { keyShown = !keyShown; $('#pairKey').textContent = keyShown ? me.pairCode : '••••••••••'; $('#showKey').textContent = keyShown ? 'Verbergen' : 'Tonen'; };
 $('#copyKey').onclick = async () => { await navigator.clipboard.writeText(me.pairCode); $('#copyKey').textContent = 'Gekopieerd!'; setTimeout(() => $('#copyKey').textContent = 'Kopiëren', 1500); };
 $('#newKey').onclick = async () => { if (!confirm('Nieuwe koppelcode maken? Het hulpprogramma moet dan opnieuw gekoppeld worden.')) return; me.pairCode = (await api('/api/pairkey', { method:'POST' })).pairCode; if (keyShown) $('#pairKey').textContent = me.pairCode; };
+$('#deleteAccount').onclick = async () => {
+  if (!confirm('Weet je zeker dat je je account wilt verwijderen? Al je instellingen en de beloningen op Twitch worden verwijderd.')) return;
+  await api('/api/account/delete', { method:'POST' });
+  location.href = '/';
+};
 $('#clearQueue').onclick = async () => {
   await api('/api/clear-queue', { method:'POST' });
   for (const id of [...pendingTests.keys()]) finishTest(id, false);

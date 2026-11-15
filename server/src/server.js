@@ -10,6 +10,7 @@ const engine = require('./engine');
 const { ACTIONS, mergeConfig } = require('./actions');
 const { FtpLink, testConnection, installMod } = require('./ftplink');
 const extension = require('./extension');
+const legal = require('./legal');
 
 // Alleen interne paden/poort (staan vast in de Docker-image). Alle echte instellingen gaan via /admin.
 const PORT = Number(process.env.PORT || 3000);
@@ -157,6 +158,7 @@ app.get('/api/admin/state', (req, res) => {
       clientId: s.clientId || '',
       clientSecretSet: !!s.clientSecret,          // het secret zelf gaat nooit naar de browser
       baseUrl: s.baseUrl || '',
+      contactEmail: s.contactEmail || '',
       extClientId: s.extClientId || '',
       extSecretSet: !!s.extSecret,
       extApiSecretSet: !!s.extApiSecret,
@@ -206,6 +208,11 @@ app.post('/api/admin/settings', requireAdmin, (req, res) => {
     const u = b.baseUrl.trim().replace(/\/$/, '');
     if (u && !/^https?:\/\/[^\s/]+$/.test(u)) return res.status(400).json({ error: 'Basisadres moet zoiets zijn als https://sabotage.mijndomein.nl' });
     fields.baseUrl = u;
+  }
+  if (typeof b.contactEmail === 'string') {
+    const v = b.contactEmail.trim();
+    if (v && !/^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(v)) return res.status(400).json({ error: 'Dat is geen geldig e-mailadres.' });
+    fields.contactEmail = v;
   }
   if (typeof b.extClientId === 'string') fields.extClientId = b.extClientId.trim();
   if (typeof b.extSecret === 'string' && b.extSecret.trim()) {
@@ -300,6 +307,25 @@ app.get('/auth/callback', async (req, res) => {
 });
 
 app.post('/auth/logout', (req, res) => { cookie(res, 'sid', '', 0, req); res.json({ ok: true }); });
+
+// Account verwijderen: Twitch-koppelingen en beloningen opruimen, gegevens wissen.
+app.post('/api/account/delete', requireUser, async (req, res) => {
+  const user = req.user;
+  const problems = [];
+  try { await twitch.unsubscribeAll(user.id); } catch (e) { problems.push(e.message); }
+  for (const rewardId of Object.values(user.rewards || {})) {
+    await twitch.deleteReward(user, rewardId).catch(e => { if (e.status !== 404) problems.push(e.message); });
+  }
+  const link = links.get(user.id);
+  if (link) { links.delete(user.id); link.close(); }
+  const c = engine.ch(user.id);
+  if (c.ws) { try { c.ws.close(4001, 'Account verwijderd'); } catch {} }
+  c.queue.length = 0;
+  db.deleteUser(user.id);
+  cookie(res, 'sid', '', 0, req);
+  if (problems.length) console.warn('[account] opruimen bij Twitch deels mislukt:', problems.join('; '));
+  res.json({ ok: true });
+});
 
 // ---------- Dashboard API (streamers) ----------
 app.get('/api/actions', (req, res) => res.json(ACTIONS));
@@ -458,6 +484,8 @@ app.get('/overlay/stream', (req, res) => {
 });
 
 app.get('/healthz', (req, res) => res.json({ ok: true }));
+app.get('/privacy', (req, res) => res.type('html').send(legal.privacy()));
+app.get('/terms', (req, res) => res.type('html').send(legal.terms()));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'admin.html')));
 app.use('/downloads', express.static(DOWNLOADS_DIR));
 app.use(express.static(path.join(__dirname, '..', 'public')));

@@ -80,6 +80,15 @@
     </div>
 
     <div class="card">
+      <h2>Contact (openbaar)</h2>
+      <p class="hint">Dit adres staat op <a href="/privacy" target="_blank">/privacy</a> en <a href="/terms" target="_blank">/terms</a>. Gebruik hetzelfde adres als het Support Email bij Twitch. Leeg laten = er staat een verwijzing naar het support-adres in de Twitch-extensielijst.</p>
+      <label for="contactEmail">Contact-e-mailadres</label>
+      <input id="contactEmail" type="email" autocomplete="off">
+      <button id="contactSave">Opslaan</button>
+      <div class="msg" id="contactMsg"></div>
+    </div>
+
+    <div class="card">
       <h2>Twitch-extensie (bits met één klik)</h2>
       <ol>
         <li>Maak op <a href="https://dev.twitch.tv/console/extensions" target="_blank" rel="noopener">dev.twitch.tv/console/extensions</a> een extensie aan. Kies bij <b>Extension Types</b>: <i>Panel</i> en <i>Video - Fullscreen</i>.</li>
@@ -150,6 +159,7 @@ async function load() {
   $('#clientSecret').value = '';
   $('#ebsUrl').textContent = 'https://' + s.ebsDomain;
   $('#extClientId').value = s.extClientId;
+  $('#contactEmail').value = s.contactEmail;
   for (const [id, set] of [['extSecret', s.extSecretSet], ['extApiSecret', s.extApiSecretSet]]) {
     $('#' + id).value = '';
     $('#' + id).placeholder = set ? '•••••••• (ingesteld, leeg laten om te houden)' : '';
@@ -177,6 +187,10 @@ $('#save').onclick = async () => {
     await api('/api/admin/settings', { clientId:$('#clientId').value, clientSecret:$('#clientSecret').value, baseUrl:$('#baseUrl').value });
     msg($('#saveMsg'), 'Opgeslagen.', true); load();
   } catch (e) { msg($('#saveMsg'), e.message); }
+};
+$('#contactSave').onclick = async () => {
+  try { await api('/api/admin/settings', { contactEmail:$('#contactEmail').value }); msg($('#contactMsg'), 'Opgeslagen.', true); }
+  catch (e) { msg($('#contactMsg'), e.message); }
 };
 $('#extSave').onclick = async () => {
   try {
