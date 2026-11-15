@@ -66,6 +66,7 @@ function defaultConfig() {
     pauseWhenOffline: true, // channel-points-beloningen pauzeren als de game niet draait
     target: 'streamer',     // 'streamer' | 'random' | 'all': wie wordt er gesaboteerd (multiplayer)
     playerName: '',         // spelernaam van de streamer in FS25 (nodig op een server)
+    extDelaySeconds: 5,     // wachttijd na betaling via de extensie (kijker scrolt naar de stream)
   };
 }
 

@@ -73,7 +73,7 @@ function publicStatus(userId) {
 }
 
 // ---------- Wachtrij ----------
-function enqueue(user, { actionId, viewer, source, amount = 0, rewardId, redemptionId, text }) {
+function enqueue(user, { actionId, viewer, source, amount = 0, rewardId, redemptionId, text, delayMs = 0 }) {
   const cfg = configOf(user);
   let action = BY_ID[actionId];
   if (!action) return null;
@@ -92,6 +92,7 @@ function enqueue(user, { actionId, viewer, source, amount = 0, rewardId, redempt
     viewer: viewer || 'Anoniem', source, amount, text: (text || '').slice(0, 200),
     target: cfg.target || 'streamer', player: (cfg.playerName || '').trim(),
     rewardId, redemptionId, queuedAt: Date.now(),
+    notBefore: delayMs > 0 ? Date.now() + delayMs : 0, // vertraging, bijv. zodat de kijker eerst naar de stream kan scrollen
   };
   ch(user.id).queue.push(cmd);
   log(user.id, { kind: 'queued', id, viewer: cmd.viewer, label: cmd.label, source, amount });
@@ -110,7 +111,16 @@ function pump(userId) {
     c.pumpTimer = setTimeout(() => pump(userId), wait + 10);
     return;
   }
-  const cmd = c.queue.shift();
+  // Eerste opdracht die klaar is (opdrachten met vertraging laten anderen niet wachten).
+  const now = Date.now();
+  const idx = c.queue.findIndex(q => !q.notBefore || q.notBefore <= now);
+  if (idx < 0) {
+    const next = Math.min(...c.queue.map(q => q.notBefore));
+    clearTimeout(c.pumpTimer);
+    c.pumpTimer = setTimeout(() => pump(userId), next - now + 10);
+    return;
+  }
+  const [cmd] = c.queue.splice(idx, 1);
   cmd.sentAt = Date.now();
   c.pending.set(cmd.id, cmd);
   c.lastDispatch = Date.now();

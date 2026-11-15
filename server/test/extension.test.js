@@ -16,7 +16,7 @@ const EVENTSUB_SECRET = 'ext-eventsub-secret';
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fs25ext-'));
 fs.mkdirSync(path.join(tmp, 'data'));
 fs.writeFileSync(path.join(tmp, 'data', 'db.json'), JSON.stringify({
-  users: { '555': { id: '555', login: 'papa', displayName: 'Papa', pairKey: 'PK5', overlayKey: 'O5', cmdEpoch: 'x', broadcasterType: '', config: { gapSeconds: 0 } } },
+  users: { '555': { id: '555', login: 'papa', displayName: 'Papa', pairKey: 'PK5', overlayKey: 'O5', cmdEpoch: 'x', broadcasterType: '', config: { gapSeconds: 0, extDelaySeconds: 2 } } },
   eventIds: [],
   settings: { sessionSecret: 's', eventsubSecret: EVENTSUB_SECRET, clientId: 'c', clientSecret: 'd', adminHash: 'a:b', extClientId: 'extcid', extSecret: EXT_SECRET },
 }));
@@ -51,6 +51,7 @@ test('menu alleen met een geldige Twitch-token', async () => {
   assert.equal(m.linked, true);
   assert.equal(m.gameActive, true);
   assert.ok(m.actions.find(a => a.sku === 'engine_off' && a.bits === 100));
+  assert.equal(m.delaySeconds, 2);
   assert.ok(!m.actions.find(a => a.sku === 'message'), '"bericht" heeft tekst nodig en hoort niet in de extensie');
 });
 
@@ -66,10 +67,15 @@ const postTx = (rcpt, channel = '555') => fetch(`${BASE}/ext/transaction`, {
   body: JSON.stringify({ receipt: rcpt, displayName: 'Kijker7' }),
 });
 
-test('betaling vanuit het paneel → sabotage naar de game', async () => {
+test('betaling vanuit het paneel → sabotage pas na de vertraging naar de game', async () => {
+  const t0 = Date.now();
   const r = await postTx(receipt('tx-1', 'engine_off', 100));
   assert.equal(r.status, 200);
+  assert.equal((await r.json()).delaySeconds, 2);
+  await sleep(1000);
+  assert.equal(commands.length, 0, 'nog niet uitgevoerd tijdens de vertraging');
   await waitFor(() => commands.length === 1);
+  assert.ok(Date.now() - t0 >= 1900, `te vroeg: ${Date.now() - t0} ms`);
   assert.equal(commands[0].action, 'engine_off');
   assert.equal(commands[0].viewer, 'Kijker7');
   assert.equal(commands[0].source, 'bits');

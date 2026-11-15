@@ -152,6 +152,7 @@
           </select></label>
         <label>Minimaal <input type="number" id="gapSeconds" min="0" max="600" style="width:70px"> sec tussen sabotages</label>
         <label><input type="checkbox" id="pauseWhenOffline"> Beloningen pauzeren als de game niet draait</label>
+        <label>Vertraging na betaling via de extensie <input type="number" id="extDelaySeconds" min="0" max="30" style="width:60px"> sec</label>
         <label>Wie wordt er gesaboteerd?
           <select id="target">
             <option value="streamer">Alleen ik</option>
@@ -290,12 +291,13 @@ function fillSettings() {
   $('#gapSeconds').value = me.config.gapSeconds;
   $('#pauseWhenOffline').checked = me.config.pauseWhenOffline;
   $('#target').value = me.config.target || 'streamer';
+  $('#extDelaySeconds').value = me.config.extDelaySeconds ?? 5;
   renderActions();
   markClean();
 }
 
 function collectConfig() {
-  const cfg = { actions:{}, bitsMode:$('#bitsMode').value, gapSeconds:$('#gapSeconds').value, pauseWhenOffline:$('#pauseWhenOffline').checked, target:$('#target').value };
+  const cfg = { actions:{}, bitsMode:$('#bitsMode').value, gapSeconds:$('#gapSeconds').value, pauseWhenOffline:$('#pauseWhenOffline').checked, target:$('#target').value, extDelaySeconds:$('#extDelaySeconds').value };
   document.querySelectorAll('#actions tr[data-id]').forEach(tr => {
     const v = {};
     tr.querySelectorAll('[data-f]').forEach(i => v[i.dataset.f] = i.type === 'checkbox' ? i.checked : String(i.value));

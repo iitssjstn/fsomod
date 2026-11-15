@@ -56,8 +56,9 @@ function handlePurchase({ channelId, transactionId, sku, bits, viewer, via }) {
     engine.log(user.id, { kind: 'ignored', viewer, source: 'bits', amount: bits, msg: `Extensie: actie "${sku}" staat uit` });
     return { ok: false, error: 'Actie staat uit' };
   }
-  engine.enqueue(user, { actionId: sku, viewer: viewer || 'Kijker', source: 'bits', amount: bits, text: `via extensie (${via})` });
-  return { ok: true };
+  const delaySeconds = cfg.extDelaySeconds ?? 5;
+  engine.enqueue(user, { actionId: sku, viewer: viewer || 'Kijker', source: 'bits', amount: bits, text: `via extensie (${via})`, delayMs: delaySeconds * 1000 });
+  return { ok: true, delaySeconds };
 }
 
 // ---------- Twitch-API met de sleutels van de extensie ----------
@@ -187,7 +188,7 @@ function mount(app, express) {
     const user = db.getUser(String(req.ext.channel_id));
     if (!user) return res.json({ linked: false, actions: [] });
     const st = engine.publicStatus(user.id);
-    res.json({ linked: true, gameActive: st.gameActive && st.companionConnected, actions: extActions(user) });
+    res.json({ linked: true, gameActive: st.gameActive && st.companionConnected, delaySeconds: engine.configOf(user).extDelaySeconds ?? 5, actions: extActions(user) });
   });
 
   app.post('/ext/transaction', requireExtAuth, express.json({ limit: '20kb' }), (req, res) => {

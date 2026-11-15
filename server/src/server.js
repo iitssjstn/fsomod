@@ -398,6 +398,7 @@ app.post('/api/config', requireUser, async (req, res) => {
   if (incoming.pauseWhenOffline !== undefined) cfg.pauseWhenOffline = !!incoming.pauseWhenOffline;
   if (['streamer', 'random', 'all'].includes(incoming.target)) cfg.target = incoming.target;
   if (typeof incoming.playerName === 'string') cfg.playerName = incoming.playerName.trim().slice(0, 64);
+  if (incoming.extDelaySeconds !== undefined) cfg.extDelaySeconds = clampInt(incoming.extDelaySeconds, 0, 30);
   const user = db.upsertUser(req.user.id, { config: cfg });
 
   let errors = [];

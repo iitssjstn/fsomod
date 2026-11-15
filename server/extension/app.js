@@ -15,6 +15,7 @@
   var bitsEnabled = true;
   var busy = false;
   var toastTimer = null;
+  var countdownTimer = null;
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -30,6 +31,27 @@
     toastTimer = setTimeout(function () { toastEl.className = 'toast hidden'; }, 5000);
   }
 
+  // Melding die aftelt tot de sabotage start, zodat de kijker naar de stream kan scrollen.
+  function countdown(name) {
+    var secs = menu && menu.delaySeconds != null ? menu.delaySeconds : 5;
+    clearInterval(countdownTimer);
+    if (secs <= 0) { toast('Bedankt. ' + name + ' wordt uitgevoerd.'); return; }
+    var scroll = mode === 'panel' ? ' Scroll naar de stream!' : '';
+    function tick() {
+      if (secs <= 0) {
+        clearInterval(countdownTimer);
+        toast(name + ' gaat nu af. Bedankt!');
+        return;
+      }
+      toastEl.textContent = 'Bedankt. ' + name + ' start over ' + secs + (secs === 1 ? ' seconde.' : ' seconden.') + scroll;
+      toastEl.className = 'toast';
+      clearTimeout(toastTimer);
+      secs--;
+    }
+    tick();
+    countdownTimer = setInterval(tick, 1000);
+  }
+
   function render() {
     app.textContent = '';
     var h = el('h1', null, 'Saboteer de boer');
@@ -39,7 +61,7 @@
     if (!menu) { app.appendChild(el('p', 'muted', 'Laden…')); return; }
     if (!menu.linked) { app.appendChild(el('p', 'muted', 'De streamer heeft Twitch Sabotage nog niet ingesteld.')); return; }
 
-    app.appendChild(el('p', 'muted', 'Kies een actie en betaal met bits. De sabotage gebeurt meteen in de game.'));
+    app.appendChild(el('p', 'muted', 'Kies een actie en betaal met bits. Een paar seconden later gebeurt het in de game.'));
 
     var state;
     if (!bitsEnabled) state = el('div', 'state off', 'Bits zijn op dit kanaal (of in deze app) niet beschikbaar.');
@@ -125,7 +147,7 @@
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ receipt: tx.transactionReceipt, displayName: tx.displayName })
     }).catch(function () { /* Twitch meldt de betaling ook rechtstreeks aan de server */ });
-    toast('Bedankt. ' + name + ' wordt uitgevoerd.');
+    countdown(name);
   });
 
   ext.bits.onTransactionCancelled(function () { busy = false; render(); });

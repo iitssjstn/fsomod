@@ -59,3 +59,16 @@ test('via FTP wordt nooit "Windows-programma verouderd" gemeld', () => {
   assert.equal(s.modOutdated, true);
   assert.equal(s.appOutdated, false);
 });
+
+test('opdracht met vertraging houdt andere opdrachten niet op', async () => {
+  const user = db.upsertUser('v3', { displayName: 'D', cmdEpoch: 'e', config: { gapSeconds: 0 } });
+  const ws = fakeLink();
+  engine.attachCompanion(user, ws);
+  ws.emit('message', JSON.stringify({ type: 'status', gameActive: true }));
+  const sentCmds = () => ws.sent.filter(m => m.type === 'command').map(m => m.cmd.action);
+  engine.enqueue(db.getUser('v3'), { actionId: 'engine_off', viewer: 'A', source: 'bits', delayMs: 600 });
+  engine.enqueue(db.getUser('v3'), { actionId: 'honk', viewer: 'B', source: 'bits' });
+  assert.deepEqual(sentCmds(), ['honk']);
+  await new Promise(r => setTimeout(r, 800));
+  assert.deepEqual(sentCmds(), ['honk', 'engine_off']);
+});

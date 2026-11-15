@@ -159,6 +159,8 @@ Instellen (eenmalig, via `/admin` op de website):
 6. Download de **extensie-zip** op `/admin` (het adres van je site zit er al in) en upload hem bij *Files*. Zet de extensie op *Hosted Test*, installeer hem op het kanaal en test.
 7. Werkt alles, dien hem dan in voor review bij Twitch. Zet na goedkeuring op `/admin` het vinkje **Testfase** uit en klik nogmaals op **Koppelen & prijzen bijwerken**.
 
+Na een betaling via de extensie wacht de server even (standaard 5 seconden, instelbaar op het dashboard) en telt het paneel af, zodat de kijker naar de stream kan scrollen. Andere sabotages wachten daar niet op.
+
 Elke betaling komt twee keer binnen (vanuit het paneel en als melding van Twitch) met hetzelfde transactienummer. Hij wordt maar één keer uitgevoerd. Bits kunnen niet worden terugbetaald; daarom zijn de knoppen grijs als de game niet actief is. De bits-producten gelden voor de hele extensie, dus de prijzen volgen het kanaal waarvoor het laatst is opgeslagen. Dat past bij één streamer.
 
 ## Voor de streamer: op een gehuurde server (bijv. G-Portal)
